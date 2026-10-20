@@ -1,6 +1,6 @@
 import {initColorPicker} from './color.js?c=43dbcb97d9';
-import {graphemes, outputScale} from './layout.js';
-import {buildImage, embedImageFonts} from './renderer.js?c=55c1a21ae6';
+import {graphemes, outputScale} from './layout.js?c=d8d3620e58';
+import {buildImage, embedImageFonts} from './renderer.js?c=7b433d4685';
 const $ = id => document.getElementById(id);
 const CATALOG = [
  {id:'alex-brush',label:'Alex Brush',family:'Alex Brush',file:'alex-brush.woff2',latin:true},
@@ -22,8 +22,9 @@ const nativeFonts = [
 ];
 const FONT_SIZE=44;
 const DEFAULT = {text:'永遠',selected:['yu','hira'],tracking:0,line:1.5,wrap:12,color:'#000000'};
-let state={...DEFAULT}, fonts=[...nativeFonts,...CATALOG.map(font=>({...font,builtin:true}))], db, renderId=0, renderFrame=0, persistTimer, readyFile, previewURL, toastTimer, customCounter=0;
+let state={...DEFAULT,selected:[...DEFAULT.selected]}, fonts=[...nativeFonts,...CATALOG.map(font=>({...font,builtin:true}))], db, renderId=0, renderFrame=0, persistTimer, readyFile, previewURL, toastTimer, customCounter=0;
 let currentImage, currentFonts=[], fitNext=true, activeControl='tracking', exportTask, exportTimer=0, exportAbort, imageRevision=-1, readyRevision=-1, exportErrorRevision=-1, sharing=false, lastEditAt=0, colorPicker;
+let initializing=true;
 const EXPORT_IDLE_MS=400, STALE_EXPORT=Symbol('stale-export');
 const camera={zoom:1,x:0,y:0}, fontData=new WeakMap();
 const loaded=new Map(), loading=new Map();
@@ -167,14 +168,16 @@ function availableFont(font){
 function showEmpty(message){currentImage=null;imageRevision=-1;clearTimeout(exportTimer);exportTimer=0;$('live-preview').replaceChildren();$('preview-guides')?.remove();$('preview-empty').hidden=false;$('preview-empty').textContent=message;setSaveState('empty');$('image-dimensions').textContent='—';}
 function render(id){
  if(id!==renderId)return;
+ if(initializing){renderStartup();return;}
  if(!state.text.trim()||!state.selected.length){showEmpty(state.selected.length?'文字を入力':'書体を選択');$('render-status').textContent='';return;}
  try{
   const selected=state.selected.map(id=>fonts.find(f=>f.id===id)).filter(Boolean);
   if(/[\u3040-\u30ff\u3400-\u9fff]/u.test(state.text)&&selected.some(f=>f.latin))throw new Error('英字書体は日本語に対応していません');
   const resolved=selected.map(availableFont);
   if(resolved.some(f=>!f)){
+   renderStartup();
    $('save-button').disabled=true;$('render-status').textContent='書体を読込中…';
-   Promise.all(selected.map(resolveFont)).then(()=>{if(id===renderId)queueRender(true);}).catch(error=>{if(id===renderId){showEmpty(error.message);$('render-status').textContent='';}});return;
+   Promise.all(selected.map(resolveFont)).then(()=>{if(id===renderId)queueRender(true);}).catch(error=>{if(id===renderId){renderStartup();setSaveState('empty');$('render-status').textContent=error.message?.includes('ファイル')?error.message:'書体を読み込めませんでした。再読み込みしてください';}});return;
   }
   const start=performance.now();
   let result=layout(resolved,state.wrap),autoWrap=false;
@@ -182,7 +185,7 @@ function render(id){
   if(outputScale(result.width,result.height)*FONT_SIZE<24)throw new Error('改行・行間・選択書体を減らしてください');
   currentImage=result;currentFonts=resolved;imageRevision=id;
   result.root.setAttribute('role','img');result.root.setAttribute('aria-label',`${state.text}の文字画像`);
-  $('live-preview').replaceChildren(result.root);drawGuides(result);$('live-preview').dataset.revision=id;
+  $('live-preview').replaceChildren(result.root);delete $('live-preview').dataset.loading;drawGuides(result);$('live-preview').dataset.revision=id;
   $('preview-empty').hidden=true;
   if(fitNext){fitCamera();fitNext=false;}else applyCamera();
   const scale=outputScale(result.width,result.height);
@@ -191,6 +194,23 @@ function render(id){
   setSaveState('preparing');schedulePNG();
   $('live-preview').dataset.paintMs=(performance.now()-start).toFixed(2);
  }catch(error){showEmpty(error.message);$('render-status').textContent='';}
+}
+function renderStartup(){
+ if(!state.text.trim()||!state.selected.length){showEmpty(state.selected.length?'文字を入力':'書体を選択');$('render-status').textContent='';return;}
+ // Show the current text immediately. The selected fonts replace this temporary
+ // system-font preview after detection/loading; it is never eligible for export.
+ const provisional=state.selected.map(id=>{
+  const font=fonts.find(f=>f.id===id);
+  return availableFont(font||{})||{family:font?.candidates?.[0]||font?.family||'serif',weight:font?.weight||400};
+ });
+ try{
+  const result=layout(provisional,state.wrap);
+  currentImage=result;imageRevision=-1;
+  result.root.setAttribute('role','img');result.root.setAttribute('aria-label',`${state.text}のプレビュー`);
+  $('live-preview').replaceChildren(result.root);$('live-preview').dataset.loading='true';
+  drawGuides(result);$('preview-empty').hidden=true;$('image-dimensions').textContent='—';$('render-status').textContent='書体を読み込み中…';
+  fitCamera();setSaveState('preparing');
+ }catch{showEmpty('書体を読み込み中…');}
 }
 function drawGuides(result){
  $('preview-guides')?.remove();
@@ -227,7 +247,7 @@ function applyCamera(){
 function fitCamera(){
  if(!currentImage)return;
  const stage=$('preview-stage').getBoundingClientRect();
- camera.zoom=Math.max(.01,Math.min(4,(stage.width-32)/currentImage.width,(stage.height-60)/currentImage.height));camera.x=0;camera.y=-10;applyCamera();
+ camera.zoom=Math.max(.01,Math.min(4,(stage.width-28)/currentImage.width,(stage.height-28)/currentImage.height));camera.x=0;camera.y=0;applyCamera();
 }
 function hasCurrentPNG(){return !!readyFile&&readyRevision===renderId&&imageRevision===renderId;}
 function setSaveState(status){
@@ -366,10 +386,12 @@ for(const type of ['pointerup','pointercancel','lostpointercapture'])$('preview-
 $('save-button').setAttribute('aria-live','polite');
 $('save-button').addEventListener('click',saveImage);
 $('download-button').addEventListener('click',()=>{if(!hasCurrentPNG())return;const link=document.createElement('a');link.href=previewURL;link.download=readyFile.name;link.click();toast('PNG画像をダウンロードします');});
-async function init(){try{const saved=JSON.parse(localStorage.getItem('kotonoha-settings-v1')||'null');if(saved){state.text=typeof saved.text==='string'?graphemes(saved.text).slice(0,160).join(''):DEFAULT.text;for(const [key,min,max] of [['tracking',-.2,.8],['line',.8,2.4],['wrap',6,24]])if(Number.isFinite(saved[key]))state[key]=Math.min(max,Math.max(min,saved[key]));if(/^#[0-9a-f]{6}$/i.test(saved.color))state.color=saved.color;if(Array.isArray(saved.selected))state.selected=saved.selected.filter(x=>typeof x==='string').slice(0,8);}}catch{}
+async function init(){try{const saved=JSON.parse(localStorage.getItem('kotonoha-settings-v1')||'null');if(saved){const hasSavedText=typeof saved.text==='string'&&saved.text.trim();state.text=hasSavedText?graphemes(saved.text).slice(0,160).join(''):DEFAULT.text;for(const [key,min,max] of [['tracking',-.2,.8],['line',.8,2.4],['wrap',6,24]])if(Number.isFinite(saved[key]))state[key]=Math.min(max,Math.max(min,saved[key]));if(/^#[0-9a-f]{6}$/i.test(saved.color))state.color=saved.color;if(hasSavedText&&Array.isArray(saved.selected)){const ids=saved.selected.filter(x=>typeof x==='string').slice(0,8);state.selected=ids.length?ids:[...DEFAULT.selected];}}}catch{}
+ syncUI();selectControl('tracking');renderStartup();
  await Promise.all(nativeFonts.map(async font=>{font.systemFamily=await detectFamily(font.candidates);}));
  try{db=await openDB();const records=await dbRequest('all');for(const record of records){if(CATALOG.some(f=>f.id===record.id))continue;try{await registerFace(record,record.bytes);const existing=fonts.findIndex(f=>f.id===record.id);if(existing>=0)fonts[existing]=record;else fonts.push(record);}catch{}}}catch{}
- state.selected=state.selected.filter(id=>fonts.some(f=>f.id===id&&(f.systemFamily||f.fallback||!f.candidates)));syncUI();selectControl('tracking');queueRender(true);
+ const hadSelection=state.selected.length>0;state.selected=state.selected.filter(id=>fonts.some(f=>f.id===id&&(f.systemFamily||f.fallback||!f.candidates)));if(hadSelection&&!state.selected.length)state.selected=[...DEFAULT.selected];
+ initializing=false;updateValues();drawFontList();queueRender(true);
 }
 function updateViewport(){
  const viewport=window.visualViewport;

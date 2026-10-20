@@ -9,14 +9,15 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>LETTERING</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?c=3680df3f55">
-  <script type="module" src="./app.js?c=cd804a708e"></script>
+  <link rel="stylesheet" href="./style.css?c=4a2653f6a9">
+  <script type="module" src="./app.js?c=46e9de645a"></script>
 </head>
 <body>
   <main class="app-shell" aria-label="レタリング画像の作成">
     <header class="app-header">
       <h1>LETTERING</h1>
-      <!-- app-version:start --><small id="app-version">v6</small><!-- app-version:end -->
+      <!-- app-version:start --><small id="app-version">v7</small><!-- app-version:end -->
+      <button id="toggle-preview" class="header-fit" type="button" aria-label="画像全体を表示">全体</button>
       <button id="open-fonts" class="fonts-button" type="button" aria-haspopup="dialog">書体 2</button>
     </header>
 
@@ -24,12 +25,9 @@
       <div id="preview-stage" class="preview-stage">
         <div id="preview-transform"><div id="live-preview"></div></div>
         <img id="preview-image" alt="文字画像のプレビュー" hidden>
-        <div id="preview-empty" class="preview-empty">文字を入力してください</div>
+        <div id="preview-empty" class="preview-empty">読み込み中…</div>
       </div>
       <span id="image-dimensions" class="image-dimensions">—</span>
-      <div class="camera-toolbar" role="group" aria-label="キャンバス表示">
-        <button id="toggle-preview" type="button" aria-label="画像全体を表示">全体</button>
-      </div>
       <p id="render-status" class="render-status" aria-live="polite"></p>
     </section>
 

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {graphemes, wrapText, outputScale, unionBounds, escapeXML} from '../layout.js';
+import {graphemes, stripOuterEmptyLines, wrapText, outputScale, unionBounds, escapeXML} from '../layout.js';
 test('combining marks and joined emoji remain intact',()=>{
  assert.equal(graphemes('か\u3099👨‍👩‍👧‍👦春').length,3);
  assert.deepEqual(wrapText('か\u3099👨‍👩‍👧‍👦春',2),['か\u3099👨‍👩‍👧‍👦','春']);
@@ -11,6 +11,19 @@ test('Japanese wrapping preserves text, blank lines, and avoids a closing mark a
  assert.equal(lines.join(''),input.replace(/\n/g,''));
  assert.ok(lines.includes(''));
  assert.ok(lines.every(s=>!s.startsWith('。')));
+});
+test('rendering ignores empty outer lines, including pasted CRLF, without reserving extra rows',()=>{
+ for(const text of ['永遠','永遠\n\n','\n\n永遠','\n永遠\n\n','\r\n永遠\r\n\r\n']){
+  assert.equal(stripOuterEmptyLines(text),'永遠');
+  assert.deepEqual(wrapText(stripOuterEmptyLines(text)),['永遠']);
+ }
+ assert.equal(stripOuterEmptyLines('\r\n\n\r'),'');
+});
+test('rendering preserves internal empty lines, spaces and indentation',()=>{
+ assert.deepEqual(wrapText(stripOuterEmptyLines('\n永遠\n\n京都\n\n')),['永遠','','京都']);
+ assert.equal(stripOuterEmptyLines('\n  永遠　\n'),'  永遠　');
+ assert.equal(stripOuterEmptyLines(' \n永遠\n '),' \n永遠\n ');
+ assert.equal(stripOuterEmptyLines('\n永遠\n  京都\n'),'永遠\n  京都');
 });
 test('all sizes fit the export dimension and area budget',()=>{
  for(const [w,h] of [[100,100],[30000,1200],[3000,10000],[500,30000]]){

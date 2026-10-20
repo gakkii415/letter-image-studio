@@ -1,6 +1,11 @@
 export const graphemes = text => Array.from(new Intl.Segmenter('ja', { granularity: 'grapheme' }).segment(text), x => x.segment);
 const closing = /^[、。，．？！!?）」』】〕〉》〗〙〛：；ー〜…]/u;
 const opening = /[（「『【〔〈《〖〘〚]$/u;
+// Rendering ignores only empty outer lines. Preserve spaces, indentation and
+// intentional empty lines between paragraphs; never trim the editable value.
+export function stripOuterEmptyLines(text) {
+  return String(text ?? '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+}
 export function wrapText(text, limit = 12) {
   return text.replace(/\r\n?/g, '\n').split('\n').flatMap(paragraph => {
     const chars = graphemes(paragraph);

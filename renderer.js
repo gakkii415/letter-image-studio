@@ -1,4 +1,4 @@
-import {graphemes, wrapText, unionBounds} from './layout.js';
+import {graphemes, stripOuterEmptyLines, wrapText, unionBounds} from './layout.js?c=d8d3620e58';
 
 const NS = 'http://www.w3.org/2000/svg';
 const XMLNS = 'http://www.w3.org/2000/xmlns/';
@@ -91,10 +91,11 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
     throw new Error('文字サイズ・字間・行間を確認してください。');
   }
   const wrapLimit = Math.max(1, Math.floor(Number(wrap) || 12));
-  const {lines, cells} = prepareLines(String(text ?? ''), wrapLimit);
-  // Keep specimens distinct, while allowing line spacing to adjust their gap.
-  const fontGap = size * (.9 + Math.max(0, line - .8) * .5);
-  const padding = Math.ceil(size * .55);
+  const {lines, cells} = prepareLines(stripOuterEmptyLines(text), wrapLimit);
+  // Compact specimen spacing follows the line control; preview guides make
+  // font boundaries clear without reserving another full character of white.
+  const fontGap = size * (.35 + Math.max(0, line - .8) * .2);
+  const padding = Math.ceil(size * .225);
   const measurement = element('svg', {'aria-hidden':'true', 'data-renderer-measurement':''});
   measurement.style.cssText = 'position:fixed;left:-20000px;top:0;width:1px;height:1px;overflow:visible;opacity:0;pointer-events:none;stroke:none;';
   try {
@@ -189,7 +190,7 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
     }
 
     const [horizontal, vertical] = sections;
-    const sectionGap = horizontal && vertical ? size * .9 : 0;
+    const sectionGap = horizontal && vertical ? size * .425 : 0;
     const width = Math.max(1, Math.ceil(Math.max(horizontal?.box.width || 0, vertical?.box.width || 0) + padding * 2));
     const height = Math.max(1, Math.ceil((horizontal?.box.height || 0) + (vertical?.box.height || 0) + sectionGap + padding * 2));
     const root = element('svg', {width, height, viewBox:`0 0 ${width} ${height}`});

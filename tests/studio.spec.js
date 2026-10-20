@@ -34,14 +34,50 @@ async function stubNativeShare(page,outcomes=[]){
   }});
  },{outcomes});
 }
+test('fresh and empty cached sessions show the default text immediately and finish with matching ready fonts',async({page})=>{
+ await page.addInitScript(()=>{
+  const scenario=new URLSearchParams(location.search).get('initial');
+  if(scenario==='fresh')localStorage.removeItem('kotonoha-settings-v1');
+  else localStorage.setItem('kotonoha-settings-v1',JSON.stringify({text:scenario==='empty'||scenario==='empty-script'?'':' \n ',selected:scenario==='empty-script'?['alex-brush']:[]}));
+  window.__startupPreview=null;
+  const observer=new MutationObserver(()=>{
+   const live=document.getElementById('live-preview'),svg=live?.querySelector('svg');
+   if(!svg)return;
+   const button=document.getElementById('save-button');
+   window.__startupPreview={input:document.getElementById('text-input').value,counter:document.getElementById('char-count').textContent,label:svg.getAttribute('aria-label'),text:[...svg.querySelectorAll('text')].map(text=>text.textContent),loading:live.dataset.loading,disabled:button.disabled,state:button.dataset.state,png:document.getElementById('saved-image').hasAttribute('src')};
+   observer.disconnect();
+  });
+  observer.observe(document,{childList:true,subtree:true});
+ });
+ for(const scenario of ['fresh','empty','whitespace','empty-script']){
+  await page.goto(`/?initial=${scenario}`);
+  await page.waitForFunction(()=>window.__startupPreview);
+  const initial=await page.evaluate(()=>window.__startupPreview);
+  expect(initial.input).toBe('永遠');expect(initial.counter).toBe('2/160');expect(initial.label).toContain('永遠');
+  expect(initial.text).toEqual(['永遠','永遠','永','遠','永','遠']);expect(initial.loading).toBe('true');
+  expect(initial.disabled).toBe(true);expect(initial.state).toBe('preparing');expect(initial.png).toBe(false);
+  await ready(page);
+  await expect(page.locator('#text-input')).toHaveValue('永遠');
+  await expect(page.locator('#live-preview > svg')).toHaveAttribute('aria-label','永遠の文字画像');
+  await expect(page.locator('#live-preview')).not.toHaveAttribute('data-loading');
+  await expect(page.locator('#live-preview [data-orientation="horizontal"]')).toHaveCount(2);
+  await expect(page.locator('#live-preview [data-orientation="vertical"]')).toHaveCount(2);
+  const revision=await page.locator('#live-preview').getAttribute('data-revision');
+  await expect(page.locator('#save-button')).toHaveAttribute('data-revision',revision);
+ }
+});
 test('workbench fits a compact iPhone viewport and exports opaque PNG',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{const OriginalBlob=window.Blob;window.__exportSVG='';window.Blob=class extends OriginalBlob{constructor(parts,options){super(parts,options);if(options?.type?.startsWith('image/svg+xml'))window.__exportSVG=parts.join('');}};});
  await page.goto('/');await ready(page);
  for(const height of [852,700,600,520]){
   await page.setViewportSize({width:393,height});await page.waitForFunction(()=>Math.abs(parseFloat(document.documentElement.style.getPropertyValue('--app-height'))-innerHeight)<1);
-  const metrics=await page.evaluate(()=>({height:innerHeight,scroll:document.documentElement.scrollHeight,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,save:document.querySelector('#save-button').getBoundingClientRect().bottom,preview:document.querySelector('#preview-stage').getBoundingClientRect().height}));
+  await page.locator('.app-header #toggle-preview').click();
+  const metrics=await page.evaluate(()=>{const stage=document.querySelector('#preview-stage').getBoundingClientRect(),image=document.querySelector('#live-preview > svg').getBoundingClientRect();return {height:innerHeight,scroll:document.documentElement.scrollHeight,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,save:document.querySelector('#save-button').getBoundingClientRect().bottom,preview:stage.height,margins:[image.left-stage.left,stage.right-image.right,image.top-stage.top,stage.bottom-image.bottom]};});
   expect(metrics.scroll).toBeLessThanOrEqual(metrics.height+1);expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.width);expect(metrics.save).toBeLessThanOrEqual(metrics.height);expect(metrics.preview).toBeGreaterThan(100);
+  for(const margin of metrics.margins)expect(margin).toBeGreaterThanOrEqual(13.5);
+  expect(Math.min(...metrics.margins)).toBeCloseTo(14,0);
+  expect(metrics.margins[0]).toBeCloseTo(metrics.margins[1],0);expect(metrics.margins[2]).toBeCloseTo(metrics.margins[3],0);
  }
  await page.setViewportSize({width:393,height:700});await page.screenshot({path:`${artifact}/lettering-phone-${info.project.name}.png`});
  const liveBefore=await page.locator('#live-preview > svg').evaluate(svg=>({width:svg.getAttribute('width'),height:svg.getAttribute('height')}));
@@ -64,6 +100,8 @@ test('both writing directions remain enabled and the input sits above the three 
  expect(await page.locator('#live-preview text').evaluateAll(nodes=>nodes.every(node=>node.getAttribute('font-size')==='44'))).toBe(true);
  await expect(page.locator('[data-mode],#size-input,#tab-size,#zoom-in,#zoom-out')).toHaveCount(0);
  await expect(page.locator('[role="tab"]')).toHaveCount(3);
+ await expect(page.locator('#text-input')).toHaveAttribute('rows','3');
+ await expect(page.locator('[data-quick-color]')).toHaveCount(11);
  await expect(page.locator('.text-input-label')).toBeVisible();await expect(page.locator('.text-input-label')).toHaveText('文字入力');
  const placement=await page.evaluate(()=>{
   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height};};
@@ -73,6 +111,24 @@ test('both writing directions remain enabled and the input sits above the three 
  expect(placement.bar.top).toBeGreaterThanOrEqual(placement.canvas.bottom-1);
  expect(placement.bar.bottom).toBeLessThanOrEqual(placement.controls.top+1);
  expect(placement.controls.top-placement.bar.bottom).toBeLessThan(20);
+});
+test('outer empty lines preserve the input while producing the same image dimensions',async({page})=>{
+ await page.goto('/');await ready(page);
+ const dimensions=()=>page.locator('#live-preview > svg').evaluate(svg=>({width:svg.getAttribute('width'),height:svg.getAttribute('height')}));
+ const base=await dimensions();
+ const pngDimensions=()=>page.locator('#saved-image').evaluate(async image=>{await image.decode();return {width:image.naturalWidth,height:image.naturalHeight};});
+ const basePNG=await pngDimensions();
+ for(const text of ['永遠\n\n','\n\n永遠\n\n']){
+  await page.locator('#text-input').fill(text);await ready(page);
+  await expect(page.locator('#text-input')).toHaveValue(text);
+  expect(await dimensions()).toEqual(base);expect(await pngDimensions()).toEqual(basePNG);
+  await expect(page.locator('#char-count')).toHaveText(`${[...text].length}/160`);
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('kotonoha-settings-v1')).text)).toBe(text);
+ }
+ await page.locator('#text-input').fill('永遠\n\n京都');await ready(page);
+ const internal=await dimensions();expect(Number(internal.width)).toBeGreaterThan(Number(base.width));expect(Number(internal.height)).toBeGreaterThan(Number(base.height));
+ expect(await page.locator('#live-preview [data-orientation="horizontal"][data-font-index="0"] text').evaluateAll(nodes=>nodes.map(node=>node.dataset.row))).toEqual(['0','2']);
+ expect(await page.locator('#live-preview [data-orientation="vertical"][data-font-index="0"] text').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.column))])).toEqual(['0','2']);
 });
 test('vertical columns use the same pitch and envelope across fonts',async({page})=>{
  await page.goto('/');await ready(page);
@@ -105,10 +161,12 @@ test('font specimens have a separate gap and preview dividers never enter the ou
  });
  for(const layout of layouts){
   const horizontal=layout.groups.filter(g=>g.orientation==='horizontal'),vertical=layout.groups.filter(g=>g.orientation==='vertical');
-  const gap=44*(.9+Math.max(0,layout.line-.8)*.5);
+  const gap=44*(.35+Math.max(0,layout.line-.8)*.2);
   expect(horizontal[1].y-horizontal[0].y-horizontal[0].height).toBeCloseTo(gap,5);
   expect(vertical[0].x-vertical[1].x-vertical[1].width).toBeCloseTo(gap,5);
-  expect(gap).toBeGreaterThanOrEqual(44*.9);
+  expect(gap).toBeGreaterThanOrEqual(44*.35);
+  expect(Math.min(...vertical.map(g=>g.y))-Math.max(...horizontal.map(g=>g.y+g.height))).toBeCloseTo(44*.425,5);
+  expect(Math.min(...layout.groups.map(g=>g.y))).toBe(Math.ceil(44*.225));
   for(const g of layout.groups){expect(g.x).toBeGreaterThanOrEqual(0);expect(g.y).toBeGreaterThanOrEqual(0);expect(g.x+g.width).toBeLessThanOrEqual(layout.width+.01);expect(g.y+g.height).toBeLessThanOrEqual(layout.height+.01);}
   expect(layout.single).toEqual(layouts[0].single);
  }
@@ -279,8 +337,8 @@ test('camera preserves zoom while adjusting spacing and supports fit and draggin
  await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(start.x+40,start.y+28,{steps:5});await page.mouse.up();
  const dragged=await camera();expect(dragged.x-restored.x).toBeCloseTo(40,0);expect(dragged.y-restored.y).toBeCloseTo(28,0);expect(dragged.zoom).toBeCloseTo(restored.zoom,5);
  await page.locator('#toggle-preview').click();const fitted=await camera();
- const expectedZoom=Math.max(.01,Math.min(4,(fitted.stage.width-32)/fitted.width,(fitted.stage.height-60)/fitted.height));
- expect(fitted.zoom).toBeCloseTo(expectedZoom,5);expect(fitted.x).toBeCloseTo(-fitted.width*expectedZoom/2,2);expect(fitted.y).toBeCloseTo(-10-fitted.height*expectedZoom/2,2);
+ const expectedZoom=Math.max(.01,Math.min(4,(fitted.stage.width-28)/fitted.width,(fitted.stage.height-28)/fitted.height));
+ expect(fitted.zoom).toBeCloseTo(expectedZoom,5);expect(fitted.x).toBeCloseTo(-fitted.width*expectedZoom/2,2);expect(fitted.y).toBeCloseTo(-fitted.height*expectedZoom/2,2);
  await page.screenshot({path:`${artifact}/lettering-camera-${info.project.name}.png`});
 });
 test('a trusted two-finger pinch zooms the preview without changing the shared font size',async({page,context,browserName})=>{
