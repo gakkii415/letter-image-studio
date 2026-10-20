@@ -2,6 +2,7 @@ import {graphemes, wrapText, unionBounds} from './layout.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const XMLNS = 'http://www.w3.org/2000/xmlns/';
+let lastText, lastWrap, lastLines;
 
 function element(name, attributes = {}) {
   const node = document.createElementNS(NS, name);
@@ -47,20 +48,35 @@ function createText(value, font, size, color) {
   return text;
 }
 
-function embedFonts(root, fonts) {
+/** Embed fonts into the supplied SVG. Clone a live preview before calling. */
+export function embedImageFonts(root, fonts) {
+  for (const child of [...root.children]) {
+    if (child.localName === 'defs' && child.hasAttribute('data-embedded-fonts')) child.remove();
+  }
   const embedded = new Map();
   for (const font of fonts) {
     if (font.data) embedded.set(JSON.stringify([font.family, font.weight ?? 400]), font);
   }
-  if (!embedded.size) return;
-  const defs = element('defs');
+  if (!embedded.size) return root;
+  const defs = element('defs', {'data-embedded-fonts':''});
   const style = element('style');
   style.textContent = [...embedded.values()].map(font => {
     const mime = /^font\/(woff2?|ttf|otf)$/.test(font.mime || '') ? font.mime : 'font/woff2';
     return `@font-face{font-family:"${cssString(font.family)}";font-style:normal;font-weight:${font.weight ?? 400};src:url("data:${mime};base64,${font.data}")}`;
   }).join('');
   defs.append(style);
-  root.append(defs);
+  root.prepend(defs);
+  return root;
+}
+
+function prepareLines(text, wrap) {
+  if (text !== lastText || wrap !== lastWrap) {
+    const lines = wrapText(text, wrap);
+    lastLines = {lines, cells:lines.map(graphemes)};
+    lastText = text;
+    lastWrap = wrap;
+  }
+  return lastLines;
 }
 
 /**
@@ -68,26 +84,22 @@ function embedFonts(root, fonts) {
  * Vertical graphemes use equal em cells; their native advance never determines
  * the next character's position. All fonts share the same layout envelope.
  */
-export function buildImage({text, fonts, size, tracking, line, wrap, color, mode}) {
+export function buildImage({text, fonts, size, tracking, line, wrap, color, mode, embedFonts = true}) {
   const cellPitch = size * (1 + tracking);
   const linePitch = size * line;
   if (![size, cellPitch, linePitch].every(value => Number.isFinite(value) && value > 0)) {
     throw new Error('文字サイズ・字間・行間を確認してください。');
   }
   const wrapLimit = Math.max(1, Math.floor(Number(wrap) || 12));
-  const lines = wrapText(String(text ?? ''), wrapLimit);
-  const cells = lines.map(graphemes);
+  const {lines, cells} = prepareLines(String(text ?? ''), wrapLimit);
   const blockPitch = lines.length * linePitch;
   const padding = Math.ceil(size * .55);
   const measurement = element('svg', {'aria-hidden':'true', 'data-renderer-measurement':''});
   measurement.style.cssText = 'position:fixed;left:-20000px;top:0;width:1px;height:1px;overflow:visible;opacity:0;pointer-events:none;stroke:none;';
-  document.body.append(measurement);
-
   try {
     function buildSection(orientation) {
       const vertical = orientation === 'vertical';
       const section = element('g', {'data-section':orientation});
-      measurement.append(section);
       const groups = fonts.map((font, fontIndex) => {
         const group = element('g', {
           'data-orientation':orientation,
@@ -97,31 +109,39 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
         });
         if (vertical) group.setAttribute('data-cell-pitch', cellPitch);
         section.append(group);
+        // Clone font/style attributes instead of setting them for every glyph.
+        const template = createText('', font, size, color);
+        if (vertical) {
+          template.setAttribute('text-anchor', 'middle');
+          template.setAttribute('dominant-baseline', 'central');
+          template.setAttribute('letter-spacing', 0);
+          template.setAttribute('writing-mode', 'vertical-rl');
+          template.style.writingMode = 'vertical-rl';
+          template.style.textOrientation = 'upright';
+          template.style.fontKerning = 'none';
+          template.style.fontFeatureSettings = '"vert" 1, "vrt2" 1';
+        } else {
+          template.setAttribute('x', 0);
+          template.setAttribute('letter-spacing', size * tracking);
+          template.style.fontKerning = 'normal';
+        }
         lines.forEach((value, row) => {
           if (vertical) {
+            const x = (lines.length - 1 - row) * linePitch + size / 2;
             cells[row].forEach((grapheme, index) => {
-              const glyph = createText(grapheme, font, size, color);
-              glyph.setAttribute('x', (lines.length - 1 - row) * linePitch + size / 2);
+              const glyph = template.cloneNode(false);
+              glyph.textContent = grapheme;
+              glyph.setAttribute('x', x);
               glyph.setAttribute('y', index * cellPitch + size / 2);
-              glyph.setAttribute('text-anchor', 'middle');
-              glyph.setAttribute('dominant-baseline', 'central');
-              glyph.setAttribute('letter-spacing', 0);
-              glyph.setAttribute('writing-mode', 'vertical-rl');
               glyph.setAttribute('data-column', row);
               glyph.setAttribute('data-cell-index', index);
-              glyph.style.writingMode = 'vertical-rl';
-              glyph.style.textOrientation = 'upright';
-              glyph.style.fontKerning = 'none';
-              glyph.style.fontFeatureSettings = '"vert" 1, "vrt2" 1';
               group.append(glyph);
             });
           } else if (value) {
-            const rowText = createText(value, font, size, color);
-            rowText.setAttribute('x', 0);
+            const rowText = template.cloneNode(false);
+            rowText.textContent = value;
             rowText.setAttribute('y', size * .8 + row * linePitch);
-            rowText.setAttribute('letter-spacing', size * tracking);
             rowText.setAttribute('data-row', row);
-            rowText.style.fontKerning = 'normal';
             group.append(rowText);
           }
         });
@@ -131,7 +151,23 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
       const logical = vertical
         ? {x:0, y:0, width:size + (lines.length - 1) * linePitch, height:size + (Math.max(1, ...cells.map(row => row.length)) - 1) * cellPitch}
         : {x:0, y:0, width:size * .2, height:size + (lines.length - 1) * linePitch};
-      const shared = unionBounds([logical, ...groups.map(bounds)]);
+      return {group:section, groups, vertical, logical};
+    }
+
+    const sections = [
+      fonts.length && mode !== 'vertical' ? buildSection('horizontal') : null,
+      fonts.length && mode !== 'horizontal' ? buildSection('vertical') : null,
+    ];
+    const active = sections.filter(Boolean);
+    if (active.length) {
+      measurement.append(...active.map(section => section.group));
+      document.body.append(measurement);
+      // Read only after all writes. The unpositioned font groups overlap, so
+      // one section bbox is exactly the union of its individual font bboxes.
+      for (const section of active) section.shared = unionBounds([section.logical, bounds(section.group)]);
+    }
+    for (const section of active) {
+      const {group:sectionGroup, groups, vertical, logical, shared} = section;
       const positioned = [];
       groups.forEach((group, index) => {
         addLayoutBounds(group, shared);
@@ -142,19 +178,17 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
         group.setAttribute('transform', `translate(${x},${y})`);
         positioned.push(moveBox(shared, x, y));
       });
-      const box = unionBounds(positioned);
-      section.remove();
-      return {group:section, box};
+      section.box = unionBounds(positioned);
+      sectionGroup.remove();
     }
 
-    const horizontal = fonts.length && mode !== 'vertical' ? buildSection('horizontal') : null;
-    const vertical = fonts.length && mode !== 'horizontal' ? buildSection('vertical') : null;
+    const [horizontal, vertical] = sections;
     const sectionGap = horizontal && vertical ? size * .9 : 0;
     const width = Math.max(1, Math.ceil(Math.max(horizontal?.box.width || 0, vertical?.box.width || 0) + padding * 2));
     const height = Math.max(1, Math.ceil((horizontal?.box.height || 0) + (vertical?.box.height || 0) + sectionGap + padding * 2));
     const root = element('svg', {width, height, viewBox:`0 0 ${width} ${height}`});
     root.setAttributeNS(XMLNS, 'xmlns', NS);
-    embedFonts(root, fonts);
+    if (embedFonts) embedImageFonts(root, fonts);
     root.append(element('rect', {width:'100%', height:'100%', fill:'#ffffff', stroke:'none'}));
     if (horizontal) {
       horizontal.group.setAttribute('transform', `translate(${padding - horizontal.box.x},${padding - horizontal.box.y})`);

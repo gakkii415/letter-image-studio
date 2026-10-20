@@ -9,55 +9,75 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>LETTERING</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?c=8b1821451b">
-  <script type="module" src="./app.js?c=6e55659b57"></script>
+  <link rel="stylesheet" href="./style.css?c=8d58286e99">
+  <script type="module" src="./app.js?c=19d47751ed"></script>
 </head>
 <body>
   <main class="app-shell" aria-label="レタリング画像の作成">
     <header class="app-header">
       <h1>LETTERING</h1>
-      <!-- app-version:start --><small id="app-version">v3</small><!-- app-version:end -->
+      <!-- app-version:start --><small id="app-version">v4</small><!-- app-version:end -->
       <button id="open-fonts" class="fonts-button" type="button" aria-haspopup="dialog">書体 2</button>
     </header>
 
     <div class="text-bar">
       <label class="sr-only" for="text-input">画像にする文字</label>
-      <textarea id="text-input" rows="2" maxlength="800" spellcheck="false" placeholder="文字を入力">永遠</textarea>
+      <textarea id="text-input" rows="2" maxlength="800" spellcheck="false" placeholder="文字を入力">言葉に、余白を。</textarea>
       <span id="char-count" class="char-count">9 / 160</span>
     </div>
 
     <div class="canvas-toolbar">
       <div class="direction-switch" role="group" aria-label="書き方向">
-        <button id="direction-both" type="button" data-mode="both" class="is-active" aria-pressed="true">両方</button>
         <button id="direction-horizontal" type="button" data-mode="horizontal" aria-pressed="false">横書き</button>
         <button id="direction-vertical" type="button" data-mode="vertical" aria-pressed="false">縦書き</button>
+        <button id="direction-both" type="button" data-mode="both" class="is-active" aria-pressed="true">両方</button>
       </div>
-      <button id="toggle-preview" class="zoom-button" type="button" aria-label="プレビューを拡大" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg><span>拡大</span></button>
     </div>
 
     <section class="canvas-area" aria-label="文字画像のプレビュー">
       <div id="preview-stage" class="preview-stage">
+        <div id="preview-transform"><div id="live-preview"></div></div>
         <img id="preview-image" alt="文字画像のプレビュー" hidden>
         <div id="preview-empty" class="preview-empty">文字を入力してください</div>
       </div>
       <span id="image-dimensions" class="image-dimensions">—</span>
+      <div class="camera-toolbar" role="group" aria-label="キャンバスの拡大縮小">
+        <button id="zoom-out" type="button" aria-label="縮小"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12"/></svg></button>
+        <output id="zoom-value" aria-label="表示倍率">100%</output>
+        <button id="zoom-in" type="button" aria-label="拡大"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M10 4v12"/></svg></button>
+        <button id="toggle-preview" type="button" aria-label="画像全体を表示">全体</button>
+      </div>
       <p id="render-status" class="render-status" aria-live="polite"></p>
     </section>
 
     <section id="controls" class="adjustment-panel" aria-label="文字の調整">
-      <div class="range-field"><label for="size-input">サイズ</label><input id="size-input" type="range" min="28" max="72" value="44" step="1"><output id="size-value" for="size-input">44px</output></div>
-      <div class="range-field"><label for="tracking-input">字間</label><input id="tracking-input" type="range" min="-0.2" max="0.8" value="0.1" step="0.025"><output id="tracking-value" for="tracking-input">+0.10em</output></div>
-      <div class="range-field"><label for="line-input">行間</label><input id="line-input" type="range" min="0.8" max="2.4" value="1.5" step="0.05"><output id="line-value" for="line-input">1.50倍</output></div>
-      <div class="color-row">
-        <span class="control-label">色</span>
-        <div class="color-options" role="group" aria-label="文字色">
-          <button class="color-swatch is-selected" data-color="#000000" style="--swatch:#000000" type="button" aria-label="黒" aria-pressed="true"></button>
-          <button class="color-swatch" data-color="#b84b3b" style="--swatch:#b84b3b" type="button" aria-label="朱" aria-pressed="false"></button>
-          <button class="color-swatch" data-color="#304f6e" style="--swatch:#304f6e" type="button" aria-label="藍" aria-pressed="false"></button>
-          <button class="color-swatch" data-color="#536757" style="--swatch:#536757" type="button" aria-label="緑" aria-pressed="false"></button>
-          <label class="custom-color" title="色を指定"><span aria-hidden="true">＋</span><input id="color-input" type="color" value="#000000" aria-label="文字色を指定"></label>
+      <div class="control-tabs" role="tablist" aria-label="調整する項目">
+        <button id="tab-size" type="button" role="tab" data-control="size" aria-controls="panel-size" aria-selected="true" class="is-active">サイズ</button>
+        <button id="tab-tracking" type="button" role="tab" data-control="tracking" aria-controls="panel-tracking" aria-selected="false" tabindex="-1">字間</button>
+        <button id="tab-line" type="button" role="tab" data-control="line" aria-controls="panel-line" aria-selected="false" tabindex="-1">行間</button>
+        <button id="tab-color" type="button" role="tab" data-control="color" aria-controls="panel-color" aria-selected="false" tabindex="-1">色</button>
+      </div>
+      <div class="adjustment-body">
+        <div class="control-value-row"><label class="sr-only" for="control-number">サイズを数値で指定</label><input id="control-number" type="number" inputmode="decimal" min="28" max="72" step="1" value="44" aria-label="サイズを数値で指定"><span id="control-unit">px</span></div>
+        <div class="adjustment-row">
+          <button id="step-down" class="step-button" type="button" aria-label="値を小さくする">−</button>
+          <div class="control-panels">
+            <div id="panel-size" class="control-panel" data-panel="size" role="tabpanel" aria-labelledby="tab-size"><label class="sr-only" for="size-input">文字サイズ</label><input id="size-input" type="range" min="28" max="72" value="44" step="1"><output id="size-value" class="sr-only" for="size-input">44px</output></div>
+            <div id="panel-tracking" class="control-panel" data-panel="tracking" role="tabpanel" aria-labelledby="tab-tracking" hidden><label class="sr-only" for="tracking-input">字間</label><input id="tracking-input" type="range" min="-0.2" max="0.8" value="0.1" step="0.025"><output id="tracking-value" class="sr-only" for="tracking-input">+0.10em</output></div>
+            <div id="panel-line" class="control-panel" data-panel="line" role="tabpanel" aria-labelledby="tab-line" hidden><label class="sr-only" for="line-input">行間</label><input id="line-input" type="range" min="0.8" max="2.4" value="1.5" step="0.05"><output id="line-value" class="sr-only" for="line-input">1.50倍</output></div>
+            <div id="panel-color" class="control-panel color-panel" data-panel="color" role="tabpanel" aria-labelledby="tab-color" hidden>
+              <div class="color-options" role="group" aria-label="文字色">
+                <button class="color-swatch is-selected" data-color="#000000" style="--swatch:#000000" type="button" aria-label="黒" aria-pressed="true"></button>
+                <button class="color-swatch" data-color="#b84b3b" style="--swatch:#b84b3b" type="button" aria-label="朱" aria-pressed="false"></button>
+                <button class="color-swatch" data-color="#304f6e" style="--swatch:#304f6e" type="button" aria-label="藍" aria-pressed="false"></button>
+                <button class="color-swatch" data-color="#536757" style="--swatch:#536757" type="button" aria-label="緑" aria-pressed="false"></button>
+                <label class="custom-color" title="色を指定"><span aria-hidden="true">＋</span><input id="color-input" type="color" value="#000000" aria-label="文字色を指定"></label>
+              </div>
+              <span id="color-value" class="color-value">#000000</span>
+            </div>
+          </div>
+          <button id="step-up" class="step-button" type="button" aria-label="値を大きくする">＋</button>
         </div>
-        <span id="color-value" class="color-value">#000000</span>
       </div>
     </section>
 
@@ -82,6 +102,8 @@
 
   <dialog id="save-dialog" class="save-dialog" aria-labelledby="save-heading">
     <div class="dialog-heading"><h2 id="save-heading">保存</h2><button id="close-save" class="icon-button" type="button" aria-label="保存画面を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+    <p id="save-status" class="save-status" aria-live="polite">画像を準備しています…</p>
+    <button id="share-button" class="share-button" type="button" disabled>写真に保存</button>
     <p class="save-guide">画像を長押し → 写真に保存</p>
     <img id="saved-image" alt="保存用の文字画像">
     <button id="download-button" class="download-button" type="button" disabled>PNGをダウンロード<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m-3-3 3 3 3-3M4 13v4h12v-4"/></svg></button>
