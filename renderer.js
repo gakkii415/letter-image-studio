@@ -92,7 +92,8 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
   }
   const wrapLimit = Math.max(1, Math.floor(Number(wrap) || 12));
   const {lines, cells} = prepareLines(String(text ?? ''), wrapLimit);
-  const blockPitch = lines.length * linePitch;
+  // Keep specimens distinct, while allowing line spacing to adjust their gap.
+  const fontGap = size * (.9 + Math.max(0, line - .8) * .5);
   const padding = Math.ceil(size * .55);
   const measurement = element('svg', {'aria-hidden':'true', 'data-renderer-measurement':''});
   measurement.style.cssText = 'position:fixed;left:-20000px;top:0;width:1px;height:1px;overflow:visible;opacity:0;pointer-events:none;stroke:none;';
@@ -168,17 +169,22 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
     }
     for (const section of active) {
       const {group:sectionGroup, groups, vertical, logical, shared} = section;
+      // Font specimens are separate text blocks. Keep a visible blank margin
+      // between their ink envelopes in addition to each specimen's own line
+      // layout, including at tight line spacing and large overhangs.
+      const groupStep = (vertical ? shared.width : shared.height) + fontGap;
       const positioned = [];
       groups.forEach((group, index) => {
         addLayoutBounds(group, shared);
         group.setAttribute('data-logical-width', logical.width);
         group.setAttribute('data-logical-height', logical.height);
-        const x = vertical ? -index * blockPitch : 0;
-        const y = vertical ? 0 : index * blockPitch;
+        const x = vertical ? -index * groupStep : 0;
+        const y = vertical ? 0 : index * groupStep;
         group.setAttribute('transform', `translate(${x},${y})`);
-        positioned.push(moveBox(shared, x, y));
+        positioned.push({...moveBox(shared, x, y), fontIndex:index, orientation:vertical ? 'vertical' : 'horizontal'});
       });
       section.box = unionBounds(positioned);
+      section.groupBounds = positioned;
       sectionGroup.remove();
     }
 
@@ -190,17 +196,21 @@ export function buildImage({text, fonts, size, tracking, line, wrap, color, mode
     root.setAttributeNS(XMLNS, 'xmlns', NS);
     if (embedFonts) embedImageFonts(root, fonts);
     root.append(element('rect', {width:'100%', height:'100%', fill:'#ffffff', stroke:'none'}));
+    const groupBounds = [];
     if (horizontal) {
-      horizontal.group.setAttribute('transform', `translate(${padding - horizontal.box.x},${padding - horizontal.box.y})`);
+      const x = padding - horizontal.box.x, y = padding - horizontal.box.y;
+      horizontal.group.setAttribute('transform', `translate(${x},${y})`);
       root.append(horizontal.group);
+      groupBounds.push(...horizontal.groupBounds.map(box => moveBox(box, x, y)));
     }
     if (vertical) {
       const x = (width - vertical.box.width) / 2 - vertical.box.x;
       const y = padding + (horizontal?.box.height || 0) + sectionGap - vertical.box.y;
       vertical.group.setAttribute('transform', `translate(${x},${y})`);
       root.append(vertical.group);
+      groupBounds.push(...vertical.groupBounds.map(box => moveBox(box, x, y)));
     }
-    return {root, width, height, wrap:wrapLimit};
+    return {root, width, height, wrap:wrapLimit, groupBounds};
   } finally {
     measurement.remove();
   }

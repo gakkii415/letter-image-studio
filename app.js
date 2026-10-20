@@ -1,5 +1,6 @@
+import {initColorPicker} from './color.js?c=78302e9170';
 import {graphemes, outputScale} from './layout.js';
-import {buildImage, embedImageFonts} from './renderer.js?c=9184deeebe';
+import {buildImage, embedImageFonts} from './renderer.js?c=55c1a21ae6';
 const $ = id => document.getElementById(id);
 const CATALOG = [
  {id:'alex-brush',label:'Alex Brush',family:'Alex Brush',file:'alex-brush.woff2',latin:true},
@@ -19,9 +20,10 @@ const nativeFonts = [
  {id:'hira',label:'ヒラギノ角ゴ W3',candidates:['Hiragino Kaku Gothic ProN','Hiragino Sans'],fallback:'noto-sans',fallbackName:'Noto Sans JP',weight:300},
  {id:'snell',label:'Snell Roundhand',candidates:['Snell Roundhand','SnellRoundhand'],weight:400}
 ];
-const DEFAULT = {text:'永遠',selected:['yu','hira'],size:44,tracking:0,line:1.5,wrap:12,color:'#000000',mode:'both'};
+const FONT_SIZE=44;
+const DEFAULT = {text:'永遠',selected:['yu','hira'],tracking:0,line:1.5,wrap:12,color:'#000000'};
 let state={...DEFAULT}, fonts=[...nativeFonts,...CATALOG.map(font=>({...font,builtin:true}))], db, renderId=0, renderFrame=0, persistTimer, readyFile, previewURL, toastTimer, customCounter=0;
-let currentImage, currentFonts=[], fitNext=true, activeControl='size', exportTask;
+let currentImage, currentFonts=[], fitNext=true, activeControl='tracking', exportTask;
 const camera={zoom:1,x:0,y:0}, fontData=new WeakMap();
 const loaded=new Map(), loading=new Map();
 function toast(message){ $('toast').textContent=message; $('toast').hidden=false; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>{$('toast').classList.remove('visible');$('toast').hidden=true;},4000); }
@@ -113,19 +115,17 @@ function importIdentity(name){
  return null;
 }
 async function importBytes(bytes,name){if(bytes.byteLength>24*1024*1024)throw new Error('24MB以下のフォントファイルを選んでください');if(bytes.byteLength<100)throw new Error('フォントファイルを確認してください');const identity=importIdentity(name),serial=customCounter++;const id=identity?.id||`custom-${Date.now()}-${serial}`;const font={id,label:identity?.label||name.replace(/\.(ttf|otf|woff2?)$/i,'').slice(0,80)||'追加フォント',family:`KotoCustom${Date.now()}${serial}`,custom:true};const previousFace=loaded.get(id)?.face;try{await registerFace(font,bytes);if(previousFace)document.fonts.delete(previousFace);}catch{throw new Error('読み込めないファイルです。ZIPは解凍し、TTF・OTF・WOFF・WOFF2を追加してください。');}const record={...font,bytes};const existing=fonts.findIndex(f=>f.id===id);if(existing>=0)fonts[existing]=record;else fonts.push(record);if(state.selected.length<8&&!state.selected.includes(id))state.selected.push(id);let persistent=true;try{await dbRequest('put',record);}catch{persistent=false;}drawFontList();queueRender(true);$('font-import-status').textContent=persistent?`${font.label}を追加しました。`: `${font.label}を追加しました。このブラウザでは再読込すると消えます。`;}
-function syncUI(){for(const key of ['size','tracking','line','wrap'])$(key==='line'?'line-input':`${key}-input`).value=state[key];$('text-input').value=state.text;$('color-input').value=state.color;updateValues();drawFontList();updateCatalog();}
-const CONTROL={size:{min:28,max:72,step:1,unit:'px',label:'サイズ'},tracking:{min:-.2,max:.8,step:.025,unit:'em',label:'字間'},line:{min:.8,max:2.4,step:.05,unit:'倍',label:'行間'}};
+function syncUI(){for(const key of ['tracking','line','wrap'])$(key==='line'?'line-input':`${key}-input`).value=state[key];$('text-input').value=state.text;updateValues();drawFontList();updateCatalog();}
+const CONTROL={tracking:{min:-.2,max:.8,step:.025,unit:'em',label:'字間'},line:{min:.8,max:2.4,step:.05,unit:'倍',label:'行間'}};
 function updateValues(){
  $('char-count').textContent=`${graphemes(state.text).length}/160`;
  $('open-fonts').textContent=`書体 ${state.selected.length}`;
- $('size-value').textContent=`${state.size}px`;
  $('tracking-value').textContent=`${state.tracking>0?'+':''}${Number(state.tracking).toFixed(3)}em`;
  $('line-value').textContent=`${Number(state.line).toFixed(2)}倍`;
  $('wrap-value').textContent=`${state.wrap}文字`;
- $('color-value').textContent=state.color.toUpperCase();
+ $('color-open-value').textContent=state.color.toUpperCase();
+ $('color-open-chip').style.backgroundColor=state.color;
  if(CONTROL[activeControl]&&document.activeElement!==$('control-number'))$('control-number').value=state[activeControl];
- document.querySelectorAll('[data-mode]').forEach(b=>{const active=b.dataset.mode===state.mode;b.setAttribute('aria-pressed',active);b.classList.toggle('is-active',active);});
- document.querySelectorAll('[data-color]').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.color===state.color);b.classList.toggle('is-selected',b.dataset.color===state.color);});
 }
 function selectControl(key){
  activeControl=key;
@@ -144,12 +144,12 @@ function queueRender(fit=false){
  updateValues();readyFile=null;renderId++;fitNext ||= fit;
  if(!renderFrame)renderFrame=requestAnimationFrame(()=>{renderFrame=0;render(renderId);});
 }
-function layout(resolved,wrap){return buildImage({text:state.text,fonts:resolved,size:state.size,tracking:state.tracking,line:state.line,wrap,color:state.color,mode:state.mode,embedFonts:false});}
+function layout(resolved,wrap){return buildImage({text:state.text,fonts:resolved,size:FONT_SIZE,tracking:state.tracking,line:state.line,wrap,color:state.color,mode:'both',embedFonts:false});}
 function availableFont(font){
  if(font.systemFamily)return {family:font.systemFamily,weight:font.weight};
  const cached=loaded.get(font.fallback||font.id);return cached?{...cached,weight:400}:null;
 }
-function showEmpty(message){currentImage=null;$('live-preview').replaceChildren();$('preview-empty').hidden=false;$('preview-empty').textContent=message;$('save-button').disabled=true;$('image-dimensions').textContent='—';}
+function showEmpty(message){currentImage=null;$('live-preview').replaceChildren();$('preview-guides')?.remove();$('preview-empty').hidden=false;$('preview-empty').textContent=message;$('save-button').disabled=true;$('image-dimensions').textContent='—';}
 function render(id){
  if(id!==renderId)return;
  if(!state.text.trim()||!state.selected.length){showEmpty(state.selected.length?'文字を入力':'書体を選択');$('render-status').textContent='';return;}
@@ -163,11 +163,11 @@ function render(id){
   }
   const start=performance.now();
   let result=layout(resolved,state.wrap),autoWrap=false;
-  if(outputScale(result.width,result.height)*state.size<24){for(let w=state.wrap+1;w<=32;w++){const candidate=layout(resolved,w);if(outputScale(candidate.width,candidate.height)>outputScale(result.width,result.height)){result=candidate;autoWrap=true;}if(outputScale(result.width,result.height)*state.size>=24)break;}}
-  if(outputScale(result.width,result.height)*state.size<24)throw new Error('改行・行間・選択書体を減らしてください');
+  if(outputScale(result.width,result.height)*FONT_SIZE<24){for(let w=state.wrap+1;w<=32;w++){const candidate=layout(resolved,w);if(outputScale(candidate.width,candidate.height)>outputScale(result.width,result.height)){result=candidate;autoWrap=true;}if(outputScale(result.width,result.height)*FONT_SIZE>=24)break;}}
+  if(outputScale(result.width,result.height)*FONT_SIZE<24)throw new Error('改行・行間・選択書体を減らしてください');
   currentImage=result;currentFonts=resolved;
   result.root.setAttribute('role','img');result.root.setAttribute('aria-label',`${state.text}の文字画像`);
-  $('live-preview').replaceChildren(result.root);$('live-preview').dataset.revision=id;
+  $('live-preview').replaceChildren(result.root);drawGuides(result);$('live-preview').dataset.revision=id;
   $('preview-empty').hidden=true;
   if(fitNext){fitCamera();fitNext=false;}else applyCamera();
   const scale=outputScale(result.width,result.height);
@@ -177,17 +177,33 @@ function render(id){
   $('live-preview').dataset.paintMs=(performance.now()-start).toFixed(2);
  }catch(error){showEmpty(error.message);$('render-status').textContent='';}
 }
+function drawGuides(result){
+ $('preview-guides')?.remove();
+ const NS='http://www.w3.org/2000/svg',overlay=document.createElementNS(NS,'svg');
+ overlay.id='preview-guides';overlay.setAttribute('aria-hidden','true');
+ for(const [key,value] of Object.entries({width:result.width,height:result.height,viewBox:`0 0 ${result.width} ${result.height}`}))overlay.setAttribute(key,value);
+ for(const direction of ['horizontal','vertical']){
+  const boxes=result.groupBounds.filter(b=>b.orientation===direction);
+  for(let i=1;i<boxes.length;i++){
+   const a=boxes[i-1],b=boxes[i],vertical=direction==='vertical',line=document.createElementNS(NS,'line');
+   const midpoint=vertical?(a.x+b.x+b.width)/2:(a.y+a.height+b.y)/2;
+   const left=Math.min(a.x,b.x)-FONT_SIZE*.12,right=Math.max(a.x+a.width,b.x+b.width)+FONT_SIZE*.12;
+   const top=Math.min(a.y,b.y)-FONT_SIZE*.12,bottom=Math.max(a.y+a.height,b.y+b.height)+FONT_SIZE*.12;
+   for(const [key,value] of Object.entries({x1:vertical?midpoint:left,y1:vertical?top:midpoint,x2:vertical?midpoint:right,y2:vertical?bottom:midpoint,stroke:'#d0d0d0','stroke-width':1,'stroke-dasharray':'3 4','vector-effect':'non-scaling-stroke','data-group-divider':direction}))line.setAttribute(key,value);
+   overlay.append(line);
+  }
+ }
+ $('preview-transform').append(overlay);
+}
 function applyCamera(){
  if(!currentImage)return;
  $('preview-transform').style.transform=`translate(${camera.x-currentImage.width*camera.zoom/2}px,${camera.y-currentImage.height*camera.zoom/2}px) scale(${camera.zoom})`;
- $('zoom-value').textContent=`${Math.round(camera.zoom*100)}%`;
 }
 function fitCamera(){
  if(!currentImage)return;
  const stage=$('preview-stage').getBoundingClientRect();
  camera.zoom=Math.max(.01,Math.min(4,(stage.width-32)/currentImage.width,(stage.height-60)/currentImage.height));camera.x=0;camera.y=-10;applyCamera();
 }
-function zoomCamera(factor){camera.zoom=Math.max(.02,Math.min(8,camera.zoom*factor));applyCamera();}
 async function svgToPNG(result){const scale=outputScale(result.width,result.height);const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.floor(result.width*scale));canvas.height=Math.max(1,Math.floor(result.height*scale));const ctx=canvas.getContext('2d');if(!ctx)throw new Error('画像を作成できませんでした。もう一度お試しください。');result.root.setAttribute('width',canvas.width);result.root.setAttribute('height',canvas.height);const svg=new XMLSerializer().serializeToString(result.root);const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('画像の描画に失敗しました。フォントを変更してお試しください。'));img.src=url;});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('画像が大きすぎます。文字数かフォント数を減らしてください。');return {blob,width:canvas.width,height:canvas.height,scale};}finally{URL.revokeObjectURL(url);canvas.width=1;canvas.height=1;}}
 async function prepareSave(){
  if(renderFrame){cancelAnimationFrame(renderFrame);renderFrame=0;render(renderId);}
@@ -217,10 +233,7 @@ async function prepareSave(){
 $('text-input').maxLength=800;
 $('text-input').addEventListener('input',event=>{const chars=graphemes(event.target.value);state.text=chars.slice(0,160).join('');if(!event.isComposing)event.target.value=state.text;queueRender(true);});
 $('text-input').addEventListener('compositionend',event=>{state.text=graphemes(event.target.value).slice(0,160).join('');event.target.value=state.text;queueRender(true);});
-for(const key of ['size','tracking','line','wrap'])$(`${key}-input`).addEventListener('input',event=>{state[key]=Number(event.target.value);queueRender(key==='wrap');});
-$('color-input').addEventListener('input',event=>{state.color=event.target.value;queueRender();});
-document.querySelectorAll('[data-color]').forEach(button=>button.addEventListener('click',()=>{state.color=button.dataset.color;$('color-input').value=state.color;queueRender();}));
-document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{state.mode=button.dataset.mode;queueRender(true);}));
+for(const key of ['tracking','line','wrap'])$(`${key}-input`).addEventListener('input',event=>{state[key]=Number(event.target.value);queueRender(key==='wrap');});
 $('open-fonts').addEventListener('click',openFonts);$('close-fonts').addEventListener('click',()=>$('font-dialog').close());$('close-save').addEventListener('click',()=>$('save-dialog').close());
 for(const dialog of [$('font-dialog'),$('save-dialog')])dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
 $('font-file').addEventListener('change',async event=>{const files=[...event.target.files];$('font-import-status').textContent='フォントを読み込んでいます…';for(const file of files){try{if(file.size>24*1024*1024)throw new Error('24MB以下のフォントファイルを選んでください');await importBytes(await file.arrayBuffer(),file.name);}catch(error){$('font-import-status').textContent=error.message;}}event.target.value='';});
@@ -235,8 +248,6 @@ $('step-up').addEventListener('click',()=>adjustControl(state[activeControl]+CON
 $('control-number').addEventListener('input',event=>{if(event.target.value!=='')adjustControl(event.target.valueAsNumber);});
 $('control-number').addEventListener('change',()=>{$('control-number').value=state[activeControl];});
 $('toggle-preview').addEventListener('click',fitCamera);
-$('zoom-in').addEventListener('click',()=>zoomCamera(1.2));
-$('zoom-out').addEventListener('click',()=>zoomCamera(1/1.2));
 const pointers=new Map();let gesture;
 function startGesture(){
  const points=[...pointers.values()];
@@ -258,10 +269,10 @@ for(const type of ['pointerup','pointercancel','lostpointercapture'])$('preview-
 $('save-button').addEventListener('click',prepareSave);
 $('share-button').addEventListener('click',()=>{if(!readyFile)return;navigator.share?.({files:[readyFile]}).catch(error=>{if(error.name!=='AbortError')$('save-status').textContent='画像を長押しして保存してください';});});
 $('download-button').addEventListener('click',()=>{if(!readyFile)return;const link=document.createElement('a');link.href=previewURL;link.download=readyFile.name;link.click();toast('PNG画像をダウンロードします');});
-async function init(){try{const saved=JSON.parse(localStorage.getItem('kotonoha-settings-v1')||'null');if(saved){state.text=typeof saved.text==='string'?graphemes(saved.text).slice(0,160).join(''):DEFAULT.text;for(const [key,min,max] of [['size',28,72],['tracking',-.2,.8],['line',.8,2.4],['wrap',6,24]])if(Number.isFinite(saved[key]))state[key]=Math.min(max,Math.max(min,saved[key]));if(/^#[0-9a-f]{6}$/i.test(saved.color))state.color=saved.color;if(['both','horizontal','vertical'].includes(saved.mode))state.mode=saved.mode;if(Array.isArray(saved.selected))state.selected=saved.selected.filter(x=>typeof x==='string').slice(0,8);}}catch{}
+async function init(){try{const saved=JSON.parse(localStorage.getItem('kotonoha-settings-v1')||'null');if(saved){state.text=typeof saved.text==='string'?graphemes(saved.text).slice(0,160).join(''):DEFAULT.text;for(const [key,min,max] of [['tracking',-.2,.8],['line',.8,2.4],['wrap',6,24]])if(Number.isFinite(saved[key]))state[key]=Math.min(max,Math.max(min,saved[key]));if(/^#[0-9a-f]{6}$/i.test(saved.color))state.color=saved.color;if(Array.isArray(saved.selected))state.selected=saved.selected.filter(x=>typeof x==='string').slice(0,8);}}catch{}
  await Promise.all(nativeFonts.map(async font=>{font.systemFamily=await detectFamily(font.candidates);}));
  try{db=await openDB();const records=await dbRequest('all');for(const record of records){if(CATALOG.some(f=>f.id===record.id))continue;try{await registerFace(record,record.bytes);const existing=fonts.findIndex(f=>f.id===record.id);if(existing>=0)fonts[existing]=record;else fonts.push(record);}catch{}}}catch{}
- state.selected=state.selected.filter(id=>fonts.some(f=>f.id===id&&(f.systemFamily||f.fallback||!f.candidates)));syncUI();selectControl('size');queueRender(true);
+ state.selected=state.selected.filter(id=>fonts.some(f=>f.id===id&&(f.systemFamily||f.fallback||!f.candidates)));syncUI();selectControl('tracking');queueRender(true);
 }
 function updateViewport(){
  const viewport=window.visualViewport;
@@ -277,5 +288,6 @@ for(const id of ['text-input','control-number']){
  $(id).addEventListener('focus',updateViewport);
  $(id).addEventListener('blur',()=>setTimeout(updateViewport,100));
 }
+initColorPicker({getColor:()=>state.color,onChange:color=>{state.color=color;queueRender();}});
 updateViewport();
 init();
