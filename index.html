@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>LETTERING</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?c=7b513137c6">
-  <script type="module" src="./app.js?c=adcda653ae"></script>
+  <link rel="stylesheet" href="./style.css?c=3680df3f55">
+  <script type="module" src="./app.js?c=cd804a708e"></script>
 </head>
 <body>
   <main class="app-shell" aria-label="レタリング画像の作成">
     <header class="app-header">
       <h1>LETTERING</h1>
-      <!-- app-version:start --><small id="app-version">v5</small><!-- app-version:end -->
+      <!-- app-version:start --><small id="app-version">v6</small><!-- app-version:end -->
       <button id="open-fonts" class="fonts-button" type="button" aria-haspopup="dialog">書体 2</button>
     </header>
 
@@ -35,7 +35,7 @@
 
     <div class="text-bar">
       <label class="text-input-label" for="text-input">文字入力</label>
-      <textarea id="text-input" rows="2" maxlength="800" spellcheck="false" placeholder="例：永遠">永遠</textarea>
+      <textarea id="text-input" rows="3" maxlength="800" spellcheck="false" placeholder="例：永遠&#10;Stay true">永遠</textarea>
       <span id="char-count" class="char-count">2 / 160</span>
     </div>
 
@@ -53,11 +53,23 @@
             <div id="panel-tracking" class="control-panel" data-panel="tracking" role="tabpanel" aria-labelledby="tab-tracking"><label class="sr-only" for="tracking-input">字間</label><input id="tracking-input" type="range" min="-0.2" max="0.8" value="0" step="0.025"><output id="tracking-value" class="sr-only" for="tracking-input">0.00em</output></div>
             <div id="panel-line" class="control-panel" data-panel="line" role="tabpanel" aria-labelledby="tab-line" hidden><label class="sr-only" for="line-input">行間</label><input id="line-input" type="range" min="0.8" max="2.4" value="1.5" step="0.05"><output id="line-value" class="sr-only" for="line-input">1.50倍</output></div>
             <div id="panel-color" class="control-panel color-panel" data-panel="color" role="tabpanel" aria-labelledby="tab-color" hidden>
-<button id="open-color" class="color-open" type="button" aria-haspopup="dialog" aria-controls="color-dialog">
-  <span id="color-open-chip" class="color-open-chip" aria-hidden="true"></span>
-  <span id="color-open-value">#000000</span>
-  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6"/></svg>
-</button>
+              <div class="color-palette" role="group" aria-label="文字色を選択">
+                <button class="color-quick" type="button" data-quick-color="#000000" style="--quick-color:#000000" aria-label="黒" aria-pressed="true"></button>
+                <button class="color-quick" type="button" data-quick-color="#4b5563" style="--quick-color:#4b5563" aria-label="グラファイト" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#c62828" style="--quick-color:#c62828" aria-label="赤" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#d65a16" style="--quick-color:#d65a16" aria-label="橙" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#a87713" style="--quick-color:#a87713" aria-label="黄土色" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#2e7d32" style="--quick-color:#2e7d32" aria-label="緑" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#007f78" style="--quick-color:#007f78" aria-label="青緑" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#1565c0" style="--quick-color:#1565c0" aria-label="青" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#253b80" style="--quick-color:#253b80" aria-label="紺" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#7b35b5" style="--quick-color:#7b35b5" aria-label="紫" aria-pressed="false"></button>
+                <button class="color-quick" type="button" data-quick-color="#b32d77" style="--quick-color:#b32d77" aria-label="赤紫" aria-pressed="false"></button>
+                <button id="open-color" class="color-quick color-more" type="button" aria-label="その他の色を選ぶ" aria-haspopup="dialog" aria-controls="color-dialog">
+                  <span class="color-more-plus" aria-hidden="true">＋</span><span class="color-more-label">その他</span>
+                  <span id="color-open-chip" class="sr-only" aria-hidden="true"></span><span id="color-open-value" class="sr-only">#000000</span>
+                </button>
+              </div>
             </div>
           </div>
           <button id="step-up" class="step-button" type="button" aria-label="値を大きくする">＋</button>
@@ -121,7 +133,6 @@
   <dialog id="save-dialog" class="save-dialog" aria-labelledby="save-heading">
     <div class="dialog-heading"><h2 id="save-heading">保存</h2><button id="close-save" class="icon-button" type="button" aria-label="保存画面を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
     <p id="save-status" class="save-status" aria-live="polite">画像を準備しています…</p>
-    <button id="share-button" class="share-button" type="button" disabled>写真に保存</button>
     <p class="save-guide">画像を長押し → 写真に保存</p>
     <img id="saved-image" alt="保存用の文字画像">
     <button id="download-button" class="download-button" type="button" disabled>PNGをダウンロード<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m-3-3 3 3 3-3M4 13v4h12v-4"/></svg></button>

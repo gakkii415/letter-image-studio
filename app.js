@@ -1,4 +1,4 @@
-import {initColorPicker} from './color.js?c=78302e9170';
+import {initColorPicker} from './color.js?c=43dbcb97d9';
 import {graphemes, outputScale} from './layout.js';
 import {buildImage, embedImageFonts} from './renderer.js?c=55c1a21ae6';
 const $ = id => document.getElementById(id);
@@ -23,7 +23,8 @@ const nativeFonts = [
 const FONT_SIZE=44;
 const DEFAULT = {text:'永遠',selected:['yu','hira'],tracking:0,line:1.5,wrap:12,color:'#000000'};
 let state={...DEFAULT}, fonts=[...nativeFonts,...CATALOG.map(font=>({...font,builtin:true}))], db, renderId=0, renderFrame=0, persistTimer, readyFile, previewURL, toastTimer, customCounter=0;
-let currentImage, currentFonts=[], fitNext=true, activeControl='tracking', exportTask;
+let currentImage, currentFonts=[], fitNext=true, activeControl='tracking', exportTask, exportTimer=0, exportAbort, imageRevision=-1, readyRevision=-1, exportErrorRevision=-1, sharing=false, lastEditAt=0, colorPicker;
+const EXPORT_IDLE_MS=400, STALE_EXPORT=Symbol('stale-export');
 const camera={zoom:1,x:0,y:0}, fontData=new WeakMap();
 const loaded=new Map(), loading=new Map();
 function toast(message){ $('toast').textContent=message; $('toast').hidden=false; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>{$('toast').classList.remove('visible');$('toast').hidden=true;},4000); }
@@ -50,7 +51,19 @@ export async function detectFamily(candidates){
  }
  return null;
 }
-function base64(buffer){let result='';const bytes=new Uint8Array(buffer);for(let i=0;i<bytes.length;i+=32768)result+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(result);}
+async function fontBase64(buffer,ensureCurrent){
+ const bytes=new Uint8Array(buffer),chunks=[],chunkSize=32766;
+ for(let offset=0;offset<bytes.length;offset+=chunkSize){
+  ensureCurrent();
+  // Full chunks end on a three-byte boundary, so their base64 can be joined.
+  chunks.push(btoa(String.fromCharCode(...bytes.subarray(offset,offset+chunkSize))));
+  if((offset/chunkSize+1)%4===0){
+   if(globalThis.scheduler?.yield)await globalThis.scheduler.yield();
+   else await new Promise(resolve=>setTimeout(resolve,0));
+  }
+ }
+ ensureCurrent();return chunks.join('');
+}
 async function registerFace(font,bytes){const face=new FontFace(font.family,bytes,{weight:'400',style:'normal'});await face.load();document.fonts.add(face);const signature=String.fromCharCode(...new Uint8Array(bytes).subarray(0,4));const mime=signature==='wOF2'?'font/woff2':signature==='wOFF'?'font/woff':signature==='OTTO'?'font/otf':'font/ttf';const item={...font,bytes,mime,face};loaded.set(font.id,item);return item;}
 async function loadCatalog(id){if(loaded.has(id))return loaded.get(id);if(loading.has(id))return loading.get(id);const task=(async()=>{const font=CATALOG.find(f=>f.id===id);if(!font)throw new Error('フォントが見つかりません');const r=await fetch(`assets/fonts/${font.file}`);if(!r.ok)throw new Error('フォントの読み込みに失敗しました');return registerFace(font,await r.arrayBuffer());})();loading.set(id,task);try{return await task;}finally{loading.delete(id);}}
 async function resolveFont(font){if(font.candidates){if(font.systemFamily)return {family:font.systemFamily,weight:font.weight};if(!font.fallback)throw new Error(`${font.label}のファイルを追加してください`);const fallback=await loadCatalog(font.fallback);return {...fallback,weight:400};}return {...(loaded.get(font.id)||await loadCatalog(font.id)),weight:400};}
@@ -125,6 +138,7 @@ function updateValues(){
  $('wrap-value').textContent=`${state.wrap}文字`;
  $('color-open-value').textContent=state.color.toUpperCase();
  $('color-open-chip').style.backgroundColor=state.color;
+ colorPicker?.sync();
  if(CONTROL[activeControl]&&document.activeElement!==$('control-number'))$('control-number').value=state[activeControl];
 }
 function selectControl(key){
@@ -141,7 +155,8 @@ function adjustControl(value){
 }
 function queueRender(fit=false){
  clearTimeout(persistTimer);persistTimer=setTimeout(saveState,300);
- updateValues();readyFile=null;renderId++;fitNext ||= fit;
+ updateValues();renderId++;lastEditAt=performance.now();fitNext ||= fit;
+ invalidatePNG();
  if(!renderFrame)renderFrame=requestAnimationFrame(()=>{renderFrame=0;render(renderId);});
 }
 function layout(resolved,wrap){return buildImage({text:state.text,fonts:resolved,size:FONT_SIZE,tracking:state.tracking,line:state.line,wrap,color:state.color,mode:'both',embedFonts:false});}
@@ -149,7 +164,7 @@ function availableFont(font){
  if(font.systemFamily)return {family:font.systemFamily,weight:font.weight};
  const cached=loaded.get(font.fallback||font.id);return cached?{...cached,weight:400}:null;
 }
-function showEmpty(message){currentImage=null;$('live-preview').replaceChildren();$('preview-guides')?.remove();$('preview-empty').hidden=false;$('preview-empty').textContent=message;$('save-button').disabled=true;$('image-dimensions').textContent='—';}
+function showEmpty(message){currentImage=null;imageRevision=-1;clearTimeout(exportTimer);exportTimer=0;$('live-preview').replaceChildren();$('preview-guides')?.remove();$('preview-empty').hidden=false;$('preview-empty').textContent=message;setSaveState('empty');$('image-dimensions').textContent='—';}
 function render(id){
  if(id!==renderId)return;
  if(!state.text.trim()||!state.selected.length){showEmpty(state.selected.length?'文字を入力':'書体を選択');$('render-status').textContent='';return;}
@@ -165,7 +180,7 @@ function render(id){
   let result=layout(resolved,state.wrap),autoWrap=false;
   if(outputScale(result.width,result.height)*FONT_SIZE<24){for(let w=state.wrap+1;w<=32;w++){const candidate=layout(resolved,w);if(outputScale(candidate.width,candidate.height)>outputScale(result.width,result.height)){result=candidate;autoWrap=true;}if(outputScale(result.width,result.height)*FONT_SIZE>=24)break;}}
   if(outputScale(result.width,result.height)*FONT_SIZE<24)throw new Error('改行・行間・選択書体を減らしてください');
-  currentImage=result;currentFonts=resolved;
+  currentImage=result;currentFonts=resolved;imageRevision=id;
   result.root.setAttribute('role','img');result.root.setAttribute('aria-label',`${state.text}の文字画像`);
   $('live-preview').replaceChildren(result.root);drawGuides(result);$('live-preview').dataset.revision=id;
   $('preview-empty').hidden=true;
@@ -173,7 +188,7 @@ function render(id){
   const scale=outputScale(result.width,result.height);
   $('image-dimensions').textContent=`${Math.floor(result.width*scale).toLocaleString()} × ${Math.floor(result.height*scale).toLocaleString()} px`;
   $('render-status').textContent=autoWrap?`${result.wrap}文字で折り返し`:'';
-  $('save-button').disabled=false;
+  setSaveState('preparing');schedulePNG();
   $('live-preview').dataset.paintMs=(performance.now()-start).toFixed(2);
  }catch(error){showEmpty(error.message);$('render-status').textContent='';}
 }
@@ -182,16 +197,26 @@ function drawGuides(result){
  const NS='http://www.w3.org/2000/svg',overlay=document.createElementNS(NS,'svg');
  overlay.id='preview-guides';overlay.setAttribute('aria-hidden','true');
  for(const [key,value] of Object.entries({width:result.width,height:result.height,viewBox:`0 0 ${result.width} ${result.height}`}))overlay.setAttribute(key,value);
- for(const direction of ['horizontal','vertical']){
-  const boxes=result.groupBounds.filter(b=>b.orientation===direction);
-  for(let i=1;i<boxes.length;i++){
-   const a=boxes[i-1],b=boxes[i],vertical=direction==='vertical',line=document.createElementNS(NS,'line');
-   const midpoint=vertical?(a.x+b.x+b.width)/2:(a.y+a.height+b.y)/2;
-   const left=Math.min(a.x,b.x)-FONT_SIZE*.12,right=Math.max(a.x+a.width,b.x+b.width)+FONT_SIZE*.12;
-   const top=Math.min(a.y,b.y)-FONT_SIZE*.12,bottom=Math.max(a.y+a.height,b.y+b.height)+FONT_SIZE*.12;
-   for(const [key,value] of Object.entries({x1:vertical?midpoint:left,y1:vertical?top:midpoint,x2:vertical?midpoint:right,y2:vertical?bottom:midpoint,stroke:'#d0d0d0','stroke-width':1,'stroke-dasharray':'3 4','vector-effect':'non-scaling-stroke','data-group-divider':direction}))line.setAttribute(key,value);
-   overlay.append(line);
-  }
+ function addLine(attributes){
+  const node=document.createElementNS(NS,'line');
+  for(const [key,value] of Object.entries({'vector-effect':'non-scaling-stroke',...attributes}))node.setAttribute(key,value);
+  overlay.append(node);
+ }
+ const horizontal=result.groupBounds.filter(b=>b.orientation==='horizontal');
+ const vertical=result.groupBounds.filter(b=>b.orientation==='vertical');
+ for(let i=1;i<horizontal.length;i++){
+  const a=horizontal[i-1],b=horizontal[i],y=(a.y+a.height+b.y)/2;
+  addLine({x1:0,y1:y,x2:result.width,y2:y,stroke:'#b3b3b3','stroke-width':1.25,'data-group-divider':'horizontal'});
+ }
+ for(let i=1;i<vertical.length;i++){
+  const a=vertical[i-1],b=vertical[i],x=(a.x+b.x+b.width)/2;
+  addLine({x1:x,y1:Math.min(a.y,b.y)-FONT_SIZE*.2,x2:x,y2:Math.max(a.y+a.height,b.y+b.height)+FONT_SIZE*.2,stroke:'#b3b3b3','stroke-width':1.25,'data-group-divider':'vertical'});
+ }
+ if(horizontal.length&&vertical.length){
+  const bottom=Math.max(...horizontal.map(b=>b.y+b.height)),top=Math.min(...vertical.map(b=>b.y));
+  const y=(bottom+top)/2;
+  addLine({x1:0,y1:y,x2:result.width,y2:y,stroke:'#e2e2e2','stroke-width':8,'data-section-band':''});
+  addLine({x1:0,y1:y,x2:result.width,y2:y,stroke:'#888888','stroke-width':1.5,'data-section-divider':''});
  }
  $('preview-transform').append(overlay);
 }
@@ -204,31 +229,103 @@ function fitCamera(){
  const stage=$('preview-stage').getBoundingClientRect();
  camera.zoom=Math.max(.01,Math.min(4,(stage.width-32)/currentImage.width,(stage.height-60)/currentImage.height));camera.x=0;camera.y=-10;applyCamera();
 }
-async function svgToPNG(result){const scale=outputScale(result.width,result.height);const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.floor(result.width*scale));canvas.height=Math.max(1,Math.floor(result.height*scale));const ctx=canvas.getContext('2d');if(!ctx)throw new Error('画像を作成できませんでした。もう一度お試しください。');result.root.setAttribute('width',canvas.width);result.root.setAttribute('height',canvas.height);const svg=new XMLSerializer().serializeToString(result.root);const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('画像の描画に失敗しました。フォントを変更してお試しください。'));img.src=url;});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('画像が大きすぎます。文字数かフォント数を減らしてください。');return {blob,width:canvas.width,height:canvas.height,scale};}finally{URL.revokeObjectURL(url);canvas.width=1;canvas.height=1;}}
-async function prepareSave(){
- if(renderFrame){cancelAnimationFrame(renderFrame);renderFrame=0;render(renderId);}
- if(!currentImage)return;
- if(!$('save-dialog').open)$('save-dialog').showModal();
- if(readyFile){$('saved-image').src=previewURL;return;}
- $('saved-image').hidden=true;$('save-status').textContent='PNGを作成中…';$('share-button').disabled=true;$('download-button').disabled=true;
- if(exportTask){await exportTask;if($('save-dialog').open&&!readyFile&&currentImage)return prepareSave();return;}
- const id=renderId,snapshot={...currentImage,root:currentImage.root.cloneNode(true)},selectedFonts=currentFonts;
+function hasCurrentPNG(){return !!readyFile&&readyRevision===renderId&&imageRevision===renderId;}
+function setSaveState(status){
+ const button=$('save-button'),label=button.querySelector('span');
+ const labels={preparing:'画像を準備中…',ready:'画像を保存',empty:'画像を保存',error:'画像を再準備',sharing:'共有中…'};
+ const text=labels[status]||labels.empty;
+ if(label.textContent!==text)label.textContent=text;
+ button.dataset.state=status;button.disabled=!['ready','error'].includes(status);
+ button.setAttribute('aria-busy',String(status==='preparing'||status==='sharing'));
+ button.setAttribute('aria-label',status==='error'?'PNG画像の作成を再試行':text);
+ if(status==='ready')button.dataset.revision=String(readyRevision);else delete button.dataset.revision;
+}
+function invalidatePNG(){
+ clearTimeout(exportTimer);exportTimer=0;exportAbort?.abort();
+ readyFile=null;readyRevision=-1;exportErrorRevision=-1;
+ if(previewURL){URL.revokeObjectURL(previewURL);previewURL=undefined;}
+ $('saved-image').hidden=true;$('saved-image').removeAttribute('src');$('download-button').disabled=true;
+ if($('save-dialog').open)$('save-status').textContent='画像を準備中…';
+ setSaveState('preparing');
+}
+function schedulePNG(delay=EXPORT_IDLE_MS){
+ clearTimeout(exportTimer);exportTimer=0;
+ if(!currentImage||imageRevision!==renderId)return;
+ const id=renderId;
+ exportTimer=setTimeout(()=>{exportTimer=0;if(id===renderId&&imageRevision===id&&!exportTask)preparePNG(id);},delay);
+}
+async function svgToPNG(result,ensureCurrent,signal){
+ ensureCurrent();
+ const scale=outputScale(result.width,result.height),canvas=document.createElement('canvas');let url;
+ canvas.width=Math.max(1,Math.floor(result.width*scale));canvas.height=Math.max(1,Math.floor(result.height*scale));
+ try{
+  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('画像を作成できませんでした。もう一度お試しください。');
+  result.root.setAttribute('width',canvas.width);result.root.setAttribute('height',canvas.height);
+  const svg=new XMLSerializer().serializeToString(result.root);
+  ensureCurrent();url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));
+  const img=new Image();
+  await new Promise((resolve,reject)=>{
+   let timeout;
+   const finish=error=>{clearTimeout(timeout);signal.removeEventListener('abort',abort);img.onload=null;img.onerror=null;if(error){img.removeAttribute('src');reject(error);}else resolve();};
+   const abort=()=>finish(STALE_EXPORT);
+   img.onload=()=>finish();img.onerror=()=>finish(new Error('画像の描画に失敗しました。フォントを変更してお試しください。'));
+   signal.addEventListener('abort',abort,{once:true});
+   timeout=setTimeout(()=>finish(new Error('画像の準備に時間がかかっています。もう一度お試しください。')),20000);
+   if(signal.aborted)abort();else img.src=url;
+  });
+  ensureCurrent();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  ensureCurrent();if(!blob)throw new Error('画像が大きすぎます。文字数かフォント数を減らしてください。');
+  return {blob,width:canvas.width,height:canvas.height,scale};
+ }finally{if(url)URL.revokeObjectURL(url);canvas.width=1;canvas.height=1;}
+}
+function preparePNG(id){
+ if(exportTask||id!==renderId||imageRevision!==id||!currentImage)return;
+ const controller=new AbortController();exportAbort=controller;
+ const ensureCurrent=()=>{if(controller.signal.aborted||id!==renderId||imageRevision!==id)throw STALE_EXPORT;};
+ const snapshot={...currentImage,root:currentImage.root.cloneNode(true)},selectedFonts=currentFonts;
  exportTask=(async()=>{
-  // Let the modal paint first. Encoding is reserved for this explicit export.
-  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  const embedded=selectedFonts.map(font=>{if(!font.bytes)return font;let data=fontData.get(font.bytes);if(!data){data=base64(font.bytes);fontData.set(font.bytes,data);}return {...font,data};});
-  embedImageFonts(snapshot.root,embedded);
-  const png=await svgToPNG(snapshot);
-  if(id!==renderId)return;
-  const oldURL=previewURL;previewURL=URL.createObjectURL(png.blob);
-  readyFile=new File([png.blob],`lettering-${new Date().toISOString().slice(0,10)}.png`,{type:'image/png'});
-  $('saved-image').src=previewURL;$('saved-image').hidden=false;
-  $('save-status').textContent='';$('share-button').disabled=false;$('download-button').disabled=false;
-  const shareable=!!(navigator.share&&navigator.canShare?.({files:[readyFile]}));
-  $('share-button').hidden=!shareable;
-  if(oldURL)URL.revokeObjectURL(oldURL);
- })().catch(error=>{$('save-status').textContent=error.message;}).finally(()=>{exportTask=null;});
- await exportTask;
+  const embedded=[];
+  for(const font of selectedFonts){
+   ensureCurrent();
+   if(!font.bytes){embedded.push(font);continue;}
+   let data=fontData.get(font.bytes);
+   if(!data){data=await fontBase64(font.bytes,ensureCurrent);fontData.set(font.bytes,data);}
+   embedded.push({...font,data});
+  }
+  ensureCurrent();embedImageFonts(snapshot.root,embedded);
+  const png=await svgToPNG(snapshot,ensureCurrent,controller.signal);ensureCurrent();
+  previewURL=URL.createObjectURL(png.blob);
+  readyFile=new File([png.blob],`lettering-${new Date().toISOString().slice(0,10)}.png`,{type:'image/png'});readyRevision=id;
+  $('saved-image').src=previewURL;$('saved-image').hidden=false;$('download-button').disabled=false;$('save-status').textContent='';
+  setSaveState(sharing?'sharing':'ready');
+ })().catch(error=>{
+  if(error===STALE_EXPORT||id!==renderId)return;
+  exportErrorRevision=id;$('save-status').textContent=error.message||'画像を作成できませんでした';setSaveState('error');toast($('save-status').textContent);
+ }).finally(()=>{
+  exportTask=null;if(exportAbort===controller)exportAbort=undefined;
+  if(currentImage&&imageRevision===renderId&&!hasCurrentPNG()&&exportErrorRevision!==renderId&&!exportTimer)schedulePNG(Math.max(0,EXPORT_IDLE_MS-(performance.now()-lastEditAt)));
+ });
+}
+function showSaveFallback(message=''){
+ if(!hasCurrentPNG())return;
+ $('saved-image').src=previewURL;$('saved-image').hidden=false;$('save-status').textContent=message;$('download-button').disabled=false;
+ if(!$('save-dialog').open)$('save-dialog').showModal();
+}
+function saveImage(){
+ if(sharing)return;
+ if(!hasCurrentPNG()){
+  if(exportErrorRevision===renderId&&currentImage&&imageRevision===renderId){exportErrorRevision=-1;setSaveState('preparing');schedulePNG(0);}
+  return;
+ }
+ const file=readyFile;
+ let shareable=false;try{shareable=!!(navigator.share&&navigator.canShare?.({files:[file]}));}catch{}
+ if(!shareable){showSaveFallback();return;}
+ sharing=true;setSaveState('sharing');
+ const failed=error=>{if(error?.name!=='AbortError')showSaveFallback('画像を長押しして写真に保存してください');};
+ const finished=()=>{sharing=false;setSaveState(hasCurrentPNG()?'ready':exportErrorRevision===renderId?'error':currentImage?'preparing':'empty');};
+ // Invoke within this click stack, before any promise or frame can consume activation.
+ try{Promise.resolve(navigator.share({files:[file]})).catch(failed).finally(finished);}catch(error){failed(error);finished();}
 }
 $('text-input').maxLength=800;
 $('text-input').addEventListener('input',event=>{const chars=graphemes(event.target.value);state.text=chars.slice(0,160).join('');if(!event.isComposing)event.target.value=state.text;queueRender(true);});
@@ -266,9 +363,9 @@ $('preview-stage').addEventListener('pointermove',event=>{
  applyCamera();
 });
 for(const type of ['pointerup','pointercancel','lostpointercapture'])$('preview-stage').addEventListener(type,event=>{pointers.delete(event.pointerId);if(pointers.size)startGesture();});
-$('save-button').addEventListener('click',prepareSave);
-$('share-button').addEventListener('click',()=>{if(!readyFile)return;navigator.share?.({files:[readyFile]}).catch(error=>{if(error.name!=='AbortError')$('save-status').textContent='画像を長押しして保存してください';});});
-$('download-button').addEventListener('click',()=>{if(!readyFile)return;const link=document.createElement('a');link.href=previewURL;link.download=readyFile.name;link.click();toast('PNG画像をダウンロードします');});
+$('save-button').setAttribute('aria-live','polite');
+$('save-button').addEventListener('click',saveImage);
+$('download-button').addEventListener('click',()=>{if(!hasCurrentPNG())return;const link=document.createElement('a');link.href=previewURL;link.download=readyFile.name;link.click();toast('PNG画像をダウンロードします');});
 async function init(){try{const saved=JSON.parse(localStorage.getItem('kotonoha-settings-v1')||'null');if(saved){state.text=typeof saved.text==='string'?graphemes(saved.text).slice(0,160).join(''):DEFAULT.text;for(const [key,min,max] of [['tracking',-.2,.8],['line',.8,2.4],['wrap',6,24]])if(Number.isFinite(saved[key]))state[key]=Math.min(max,Math.max(min,saved[key]));if(/^#[0-9a-f]{6}$/i.test(saved.color))state.color=saved.color;if(Array.isArray(saved.selected))state.selected=saved.selected.filter(x=>typeof x==='string').slice(0,8);}}catch{}
  await Promise.all(nativeFonts.map(async font=>{font.systemFamily=await detectFamily(font.candidates);}));
  try{db=await openDB();const records=await dbRequest('all');for(const record of records){if(CATALOG.some(f=>f.id===record.id))continue;try{await registerFace(record,record.bytes);const existing=fonts.findIndex(f=>f.id===record.id);if(existing>=0)fonts[existing]=record;else fonts.push(record);}catch{}}}catch{}
@@ -288,6 +385,6 @@ for(const id of ['text-input','control-number']){
  $(id).addEventListener('focus',updateViewport);
  $(id).addEventListener('blur',()=>setTimeout(updateViewport,100));
 }
-initColorPicker({getColor:()=>state.color,onChange:color=>{state.color=color;queueRender();}});
+colorPicker=initColorPicker({getColor:()=>state.color,onChange:color=>{state.color=color;queueRender();}});
 updateViewport();
 init();

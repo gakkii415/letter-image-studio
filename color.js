@@ -61,6 +61,7 @@ export function initColorPicker({getColor, onChange}) {
     throw new Error('Color picker needs six existing [data-recent-index] buttons');
   }
   const monoButtons = [...dialog.querySelectorAll('[data-picker-color]')];
+  const quickButtons = [...document.querySelectorAll('[data-quick-color]')];
   const events = new AbortController();
   const listen = (element, type, handler, options = {}) => element.addEventListener(type, handler, {...options, signal: events.signal});
   let selected = normalizeHex(getColor()) || '#000000';
@@ -97,6 +98,11 @@ export function initColorPicker({getColor, onChange}) {
     }
     monoButtons.forEach(button => {
       const color = normalizeHex(button.dataset.pickerColor);
+      if (color) button.style.backgroundColor = color;
+      button.setAttribute('aria-pressed', String(color === selected));
+    });
+    quickButtons.forEach(button => {
+      const color = normalizeHex(button.dataset.quickColor);
       if (color) button.style.backgroundColor = color;
       button.setAttribute('aria-pressed', String(color === selected));
     });
@@ -225,6 +231,9 @@ export function initColorPicker({getColor, onChange}) {
   });
   monoButtons.forEach(button => listen(button, 'click', () => {
     if (applyHex(button.dataset.pickerColor, {forceHex: true})) remember();
+  }));
+  quickButtons.forEach(button => listen(button, 'click', () => {
+    if (applyHex(button.dataset.quickColor, {forceHex: true})) remember();
   }));
   recentButtons.forEach((button, index) => listen(button, 'click', () => {
     if (recent[index] && applyHex(recent[index], {forceHex: true})) remember();

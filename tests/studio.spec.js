@@ -1,19 +1,42 @@
 import {test,expect} from '@playwright/test';
 const artifact=process.env.LETTERING_ARTIFACT_DIR||'test-results/screenshots';
-async function ready(page){
+async function liveReady(page){
  await expect(page.locator('#live-preview > svg')).toBeVisible({timeout:30000});
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+}
+async function ready(page){
+ await liveReady(page);
+ await expect(page.locator('#save-button')).toHaveAttribute('data-state','ready',{timeout:30000});
  await expect(page.locator('#save-button')).toBeEnabled({timeout:30000});
 }
 async function exportPNG(page){
+ await ready(page);
+ await page.evaluate(()=>Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false}));
  await page.locator('#save-button').click();
  await expect(page.locator('#save-dialog')).toBeVisible();
  await expect(page.locator('#saved-image')).toBeVisible({timeout:30000});
  await page.waitForFunction(()=>{const image=document.querySelector('#saved-image');return image.complete&&image.naturalWidth>0;},{},{timeout:30000});
  await expect(page.locator('#download-button')).toBeEnabled();
 }
+async function stubNativeShare(page,outcomes=[]){
+ await page.addInitScript(({outcomes})=>{
+  window.__shareCalls=[];window.__saveClickEvent=null;window.__saveClickRevision=null;
+  document.addEventListener('click',event=>{
+   const button=event.target instanceof Element?event.target.closest('#save-button'):null;
+   if(!button)return;
+   window.__saveClickEvent=event;window.__saveClickRevision=button.dataset.revision;
+  },true);
+  Object.defineProperty(navigator,'canShare',{configurable:true,value:({files}={})=>files?.length===1&&files[0] instanceof File&&files[0].type==='image/png'});
+  Object.defineProperty(navigator,'share',{configurable:true,value:({files})=>{
+   const outcome=outcomes[window.__shareCalls.length];
+   window.__shareCalls.push({file:files[0],count:files.length,duringClick:window.__saveClickEvent?.currentTarget===document.getElementById('save-button'),revision:Number(window.__saveClickRevision),current:Number(document.querySelector('#live-preview').dataset.revision)});
+   return outcome==='abort'?Promise.reject(new DOMException('Cancelled','AbortError')):outcome==='error'?Promise.reject(new DOMException('Share failed','NotAllowedError')):Promise.resolve();
+  }});
+ },{outcomes});
+}
 test('workbench fits a compact iPhone viewport and exports opaque PNG',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{const OriginalBlob=window.Blob;window.__exportSVG='';window.Blob=class extends OriginalBlob{constructor(parts,options){super(parts,options);if(options?.type?.startsWith('image/svg+xml'))window.__exportSVG=parts.join('');}};});
  await page.goto('/');await ready(page);
  for(const height of [852,700,600,520]){
   await page.setViewportSize({width:393,height});await page.waitForFunction(()=>Math.abs(parseFloat(document.documentElement.style.getPropertyValue('--app-height'))-innerHeight)<1);
@@ -23,14 +46,13 @@ test('workbench fits a compact iPhone viewport and exports opaque PNG',async({pa
  await page.setViewportSize({width:393,height:700});await page.screenshot({path:`${artifact}/lettering-phone-${info.project.name}.png`});
  const liveBefore=await page.locator('#live-preview > svg').evaluate(svg=>({width:svg.getAttribute('width'),height:svg.getAttribute('height')}));
  const guideSample=await page.locator('#preview-guides line[data-group-divider="horizontal"]').evaluate(line=>({x:(Number(line.getAttribute('x1'))+Number(line.getAttribute('x2')))/2,y:Number(line.getAttribute('y1'))}));
- await page.evaluate(()=>{const OriginalBlob=window.Blob;window.__exportSVG='';window.Blob=class extends OriginalBlob{constructor(parts,options){super(parts,options);if(options?.type?.startsWith('image/svg+xml'))window.__exportSVG=parts.join('');}};});
  await exportPNG(page);
  const rgba=await page.evaluate(({guide,width,height})=>{const image=document.querySelector('#saved-image');const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const c=canvas.getContext('2d');c.drawImage(image,0,0);return {corner:[...c.getImageData(0,0,1,1).data],divider:[...c.getImageData(Math.floor(guide.x*canvas.width/Number(width)),Math.floor(guide.y*canvas.height/Number(height)),1,1).data]};},{guide:guideSample,...liveBefore});
  expect(rgba.corner).toEqual([255,255,255,255]);expect(rgba.divider).toEqual([255,255,255,255]);expect(errors).toEqual([]);
  expect(await page.locator('#live-preview > svg').evaluate(svg=>({width:svg.getAttribute('width'),height:svg.getAttribute('height')}))).toEqual(liveBefore);
  await expect(page.locator('#live-preview style')).toHaveCount(0);
  const serialized=await page.evaluate(()=>window.__exportSVG);
- expect(serialized).not.toContain('preview-guides');expect(serialized).not.toContain('data-group-divider');
+ expect(serialized).toContain('<svg');expect(serialized).not.toContain('preview-guides');expect(serialized).not.toContain('data-group-divider');expect(serialized).not.toContain('data-section-divider');expect(serialized).not.toContain('data-section-band');
  await page.locator('#close-save').click();
  await page.setViewportSize({width:1280,height:900});await page.screenshot({path:`${artifact}/lettering-desktop-${info.project.name}.png`});
 });
@@ -181,7 +203,7 @@ test('parameter input updates the live SVG on the next frame without PNG encodin
  });
  expect(tracking.revision).toBeGreaterThan(tracking.before);expect(tracking.pitch).toBeCloseTo(57.2);
  await page.locator('#tab-line').click();
- await page.locator('#control-number').fill('1.8');await ready(page);
+ await page.locator('#control-number').fill('1.8');await liveReady(page);
  expect(await page.locator('#live-preview [data-orientation="vertical"]').first().evaluate(g=>Number(g.dataset.linePitch))).toBeCloseTo(79.2);
  const composition=await page.evaluate(async()=>{
   const live=document.querySelector('#live-preview'),before=Number(live.dataset.revision),input=document.querySelector('#text-input');
@@ -244,12 +266,15 @@ test('the full color picker supports HEX, hue, a color field and persistent rece
 test('camera preserves zoom while adjusting spacing and supports fit and dragging',async({page},info)=>{
  await page.goto('/');await ready(page);
  const camera=()=>page.evaluate(()=>{
-  const transform=new DOMMatrix(getComputedStyle(document.querySelector('#preview-transform')).transform),svg=document.querySelector('#live-preview > svg'),glyph=svg.querySelector('text').getBoundingClientRect(),stage=document.querySelector('#preview-stage').getBoundingClientRect();
-  return {zoom:transform.a,x:transform.e,y:transform.f,glyphHeight:glyph.height,width:Number(svg.getAttribute('width')),height:Number(svg.getAttribute('height')),stage:{x:stage.x,y:stage.y,width:stage.width,height:stage.height}};
+  const transform=new DOMMatrix(getComputedStyle(document.querySelector('#preview-transform')).transform),svg=document.querySelector('#live-preview > svg'),glyph=svg.querySelector('text'),stage=document.querySelector('#preview-stage').getBoundingClientRect();
+  // Native WebKit ink bounds vary with fractional positioning. The actual
+  // type size is determined by font-size and its complete screen transform.
+  return {zoom:transform.a,x:transform.e,y:transform.f,glyphScale:glyph.getScreenCTM().a,fontSizes:[...svg.querySelectorAll('text')].map(text=>({attribute:text.getAttribute('font-size'),computed:getComputedStyle(text).fontSize})),width:Number(svg.getAttribute('width')),height:Number(svg.getAttribute('height')),stage:{x:stage.x,y:stage.y,width:stage.width,height:stage.height}};
  });
  const before=await camera();await expect(page.locator('#control-number')).toHaveValue('0');
  await page.locator('#control-number').fill('0.6');await ready(page);const restored=await camera();
- expect(restored.zoom).toBeCloseTo(before.zoom,5);expect(Math.abs(restored.glyphHeight-before.glyphHeight)).toBeLessThan(.5);
+ expect(restored.zoom).toBeCloseTo(before.zoom,5);expect(restored.glyphScale).toBeCloseTo(before.glyphScale,5);
+ expect(restored.fontSizes).toEqual(before.fontSizes);expect(restored.fontSizes.every(size=>size.attribute==='44'&&size.computed==='44px')).toBe(true);
  const start={x:restored.stage.x+restored.stage.width*.45,y:restored.stage.y+restored.stage.height*.35};
  await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(start.x+40,start.y+28,{steps:5});await page.mouse.up();
  const dragged=await camera();expect(dragged.x-restored.x).toBeCloseTo(40,0);expect(dragged.y-restored.y).toBeCloseTo(28,0);expect(dragged.zoom).toBeCloseTo(restored.zoom,5);
@@ -279,15 +304,55 @@ test('a trusted two-finger pinch zooms the preview without changing the shared f
  const pointers=await page.evaluate(()=>window.__touchPointers);expect(new Set(pointers.map(p=>p.id)).size).toBe(2);expect(pointers.every(p=>p.trusted)).toBe(true);
  await session.send('Emulation.setTouchEmulationEnabled',{enabled:false});await session.detach();
 });
-test('reopening save after changing an unfinished export uses the latest image',async({page})=>{
- await page.goto('/');await ready(page);
- await page.evaluate(()=>{const original=HTMLCanvasElement.prototype.toBlob;let calls=0;HTMLCanvasElement.prototype.toBlob=function(callback,...args){original.call(this,blob=>{if(++calls===1)window.releasePNG=()=>callback(blob);else callback(blob);},...args);};});
- await page.locator('#save-button').click();await page.waitForFunction(()=>typeof window.releasePNG==='function');
- await page.locator('#close-save').click();await page.locator('#control-number').fill('0.6');await page.locator('#control-number').press('Tab');
- expect(await page.locator('#live-preview [data-orientation="vertical"]').first().evaluate(g=>Number(g.dataset.cellPitch))).toBeCloseTo(70.4);
- await page.locator('#save-button').click();await page.evaluate(()=>window.releasePNG());
+test('one save tap synchronously shares a prepared PNG and cancellation allows another tap',async({page})=>{
+ await stubNativeShare(page,['abort']);await page.goto('/');await ready(page);
+ await page.locator('#save-button').click();await page.waitForFunction(()=>window.__shareCalls.length===1);await ready(page);
+ await expect(page.locator('#save-dialog')).toBeHidden();
+ const first=await page.evaluate(async()=>{const call=window.__shareCalls[0],bytes=new Uint8Array(await call.file.arrayBuffer());return {file:call.file instanceof File,type:call.file.type,name:call.file.name,size:call.file.size,count:call.count,duringClick:call.duringClick,revision:call.revision,current:call.current,signature:[...bytes.subarray(0,8)]};});
+ expect(first.file).toBe(true);expect(first.type).toBe('image/png');expect(first.name).toMatch(/\.png$/);expect(first.size).toBeGreaterThan(100);expect(first.count).toBe(1);
+ expect(first.duringClick).toBe(true);expect(first.revision).toBe(first.current);expect(first.signature).toEqual([137,80,78,71,13,10,26,10]);
+ await page.locator('#save-button').click();await page.waitForFunction(()=>window.__shareCalls.length===2);await ready(page);
+ expect(await page.evaluate(()=>window.__shareCalls[0].file===window.__shareCalls[1].file&&window.__shareCalls[1].duringClick)).toBe(true);
+ await expect(page.locator('#save-dialog')).toBeHidden();await expect(page.locator('#share-button')).toHaveCount(0);
+});
+
+test('an unfinished PNG cannot be shared and only the latest revision becomes ready',async({page})=>{
+ await stubNativeShare(page);
+ await page.addInitScript(()=>{
+  window.__pngCallbacks=[];window.__pngCalls=0;const original=HTMLCanvasElement.prototype.toBlob;
+  HTMLCanvasElement.prototype.toBlob=function(callback,...args){window.__pngCalls++;original.call(this,blob=>window.__pngCallbacks.push(()=>callback(blob)),...args);};
+ });
+ await page.goto('/');await liveReady(page);await page.waitForFunction(()=>window.__pngCallbacks.length===1);
+ const previous=await page.locator('#image-dimensions').textContent();
+ await expect(page.locator('#save-button')).toBeDisabled();
+ await page.locator('#control-number').fill('0.6');await liveReady(page);
+ const expected=await page.locator('#image-dimensions').textContent();expect(expected).not.toBe(previous);
+ await page.locator('#save-button').evaluate(button=>button.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+ expect(await page.evaluate(()=>window.__shareCalls.length)).toBe(0);
+ await page.waitForTimeout(450);expect(await page.evaluate(()=>window.__pngCalls)).toBe(1);
+ await page.evaluate(()=>window.__pngCallbacks[0]());await page.waitForFunction(()=>window.__pngCallbacks.length===2);
+ await expect(page.locator('#save-button')).toBeDisabled();
+ await page.locator('#save-button').evaluate(button=>button.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+ expect(await page.evaluate(()=>window.__shareCalls.length)).toBe(0);
+ await page.evaluate(()=>window.__pngCallbacks[1]());await ready(page);
+ await page.locator('#save-button').click();await page.waitForFunction(()=>window.__shareCalls.length===1);
+ const shared=await page.evaluate(async()=>{const call=window.__shareCalls[0],bytes=await call.file.arrayBuffer(),header=new DataView(bytes);return {width:header.getUint32(16),height:header.getUint32(20),revision:call.revision,current:call.current};});
+ expect(expected).toBe(`${shared.width.toLocaleString()} × ${shared.height.toLocaleString()} px`);expect(shared.revision).toBe(shared.current);
+ expect(await page.evaluate(()=>window.__pngCalls)).toBe(2);await expect(page.locator('#save-dialog')).toBeHidden();
+});
+
+test('a failed share opens the existing PNG fallback without generating another file',async({page})=>{
+ await stubNativeShare(page,['error']);await page.goto('/');await ready(page);
+ await page.evaluate(()=>{window.__unexpectedPNG=0;const original=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(...args){window.__unexpectedPNG++;return original.apply(this,args);};});
+ await page.locator('#save-button').click();await expect(page.locator('#save-dialog')).toBeVisible();
  await expect(page.locator('#saved-image')).toBeVisible();await expect(page.locator('#download-button')).toBeEnabled();
- await page.waitForFunction(()=>document.querySelector('#saved-image').complete&&document.querySelector('#saved-image').naturalWidth>0);
- const dimensions=await page.evaluate(()=>({expected:document.querySelector('#image-dimensions').textContent,actual:document.querySelector('#saved-image').naturalWidth}));
- expect(dimensions.expected).toMatch(new RegExp(`^${dimensions.actual.toLocaleString()} ×`));
+ expect(await page.evaluate(()=>window.__shareCalls.length)).toBe(1);expect(await page.evaluate(()=>window.__unexpectedPNG)).toBe(0);
+});
+
+test('a PNG preparation error can be retried without sharing an absent file',async({page})=>{
+ await stubNativeShare(page);
+ await page.addInitScript(()=>{let calls=0;const original=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(callback,...args){if(++calls===1)queueMicrotask(()=>callback(null));else original.call(this,callback,...args);};});
+ await page.goto('/');await liveReady(page);await expect(page.locator('#save-button')).toHaveAttribute('data-state','error',{timeout:30000});
+ await page.locator('#save-button').click();expect(await page.evaluate(()=>window.__shareCalls.length)).toBe(0);await ready(page);
+ await page.locator('#save-button').click();await page.waitForFunction(()=>window.__shareCalls.length===1);
 });
