@@ -46,11 +46,12 @@
 
 ## Project Feature Maturity
 
-- Product / users / core outcome:
-- Current maturity:
-- Core feature set / completion criteria:
-- Next target state:
-- Expansion Set:
-- Deferred or rejected items / reasons:
-- Important flows / states / data decisions:
-- Durable feature decisions:
+入力、複数書体の選択、縦横の比較、共通の文字サイズでのPNG保存が中心機能。横書きは上から、縦書きは右から選択順に並べる。書体名などの補助情報は保存画像に含めない。
+
+画像は白背景固定。字間、行間、文字色、折り返しを調整できる。文字の描画境界を計測して画像の大きさを決め、全書体と縦横で同じ文字サイズを使う。
+
+追加書体はFontFaceとIndexedDBでアプリ内に保存する。OSへのインストールは行わない。游明朝体・ヒラギノ角ゴW3が使えない端末では代替表示を明示する。
+
+空入力、全書体解除、読込中、失敗時は保存を無効にする。PNGを先に準備し、iPhoneのタップ直後にWeb Shareを呼び出す。非対応時は画像を表示して長押し保存を案内する。
+
+ブラウザ内の保存に限定し、アカウントやサーバーへの入力送信は追加しない。入力160文字、同時選択8書体、画像は最大1,200万画素とする。最低限の可読サイズを保てない入力は設定変更を案内する。

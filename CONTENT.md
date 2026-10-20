@@ -48,12 +48,8 @@
 
 ## Project Content Maturity
 
-- Content value / audience / use context:
-- Content types / structure / quality bar:
-- Current maturity / coverage / depth:
-- Core content set / completion criteria:
-- Next target state:
-- Expansion Set:
-- Deferred or rejected areas / reasons:
-- Sources / freshness / maintenance:
-- Durable content decisions:
+日本語の文字画像を作りたい人向け。初期入力「言葉に、余白を。」で書体比較と保存結果を確認できる。
+
+書体追加時は各OFLライセンスと出典を示す。ファイル形式、ZIPの解凍、直接URLの制限、保存先がブラウザ内であることを短く説明する。iPhoneは共有メニューの「画像を保存」または画像の長押しで写真へ保存する。
+
+宣伝文、用途と無関係な作例集、会員向け記事は増やさない。游明朝がない場合の代替表示と、読み込み・保存失敗の文言は実際の状態に一致させる。

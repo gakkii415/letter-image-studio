@@ -350,14 +350,10 @@ Yesの場合、装飾を追加する前に、構成、情報階層、コンテ�
 
 ## Project Direction
 
-- Product / users / primary task:
-- Context of use / target devices:
-- Desired impression:
-- Information density / hierarchy:
-- Reference products / source URLs:
-- Selected reference dimensions / what to borrow:
-- What not to copy / avoid:
-- Structural direction:
-- Typography / color / spacing / shape direction:
-- Motion / responsive direction:
-- Durable design decisions:
+既存の文字画像アプリを移行する。今回の範囲では新規UIや全面刷新を行わず、既存の文字入力・書体比較・画像保存の構成を維持する。デザイン参照調査を完了したとは扱わない。
+
+主な利用端末はiPhone 16。モバイルは入力、書体、調整、プレビューの順で表示し、保存操作は画面下部に固定する。Desktopは設定と白い画像を左右に分け、設定変更と結果を比較しやすくする。
+
+画像の白背景は固定。アプリの補助色は書体選択と保存操作に使用し、保存画像には含めない。本文・ラベルは日本語システムフォント、文字画像は選択した書体と共通サイズを使用する。専用の表示バージョンをフッターに常時表示する。
+
+外部の装飾画像やアニメーションは不要。生成したPNGそのものをプレビューとし、実際に保存される内容を判断できることを優先する。

@@ -1,0 +1,21 @@
+All font files are distributed under the SIL Open Font License 1.1.
+The adjacent *-OFL.txt files contain their copyright and license notices.
+Google Fonts source commit: 47d54ca1ebb14fd864695f1d39dc734f39017c33
+Full character maps, glyphs and vertical metrics are retained.
+Noto variable fonts are instantiated at weight 400; all outputs are Regular WOFF2.
+
+noto-serif-jp.woff2 — Noto Serif JP, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notoserifjp/NotoSerifJP%5Bwght%5D.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notoserifjp
+
+noto-sans-jp.woff2 — Noto Sans JP, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansjp
+
+zen-maru-gothic.woff2 — Zen Maru Gothic, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/zenmarugothic/ZenMaruGothic-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/zenmarugothic
+
+yuji-syuku.woff2 — Yuji Syuku, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/yujisyuku/YujiSyuku-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/yujisyuku
