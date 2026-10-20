@@ -4,56 +4,88 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <meta name="description" content="好きな言葉を、好きな書体で。縦書き・横書きを比べながら、白い背景の文字画像をつくれます。">
+  <meta name="description" content="書体・字間・行間を調整して、縦書きと横書きのレタリング画像を作成。">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>ことのは — 文字を、かたちに。</title>
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.js"></script>
+  <title>LETTERING</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css?c=8b1821451b">
+  <script type="module" src="./app.js?c=6e55659b57"></script>
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="./" aria-label="ことのは ホーム"><span class="brand-mark" aria-hidden="true">言</span><span>ことのは</span></a>
-    <span class="header-caption">小さな文字のアトリエ</span>
-  </header>
-  <main class="workspace">
-    <section class="editor" aria-label="文字画像の設定">
-      <div class="intro"><p class="eyebrow">TYPE TO IMAGE</p><h1>文字を、かたちに。</h1><p class="intro-copy">言葉と書体を選んで、<br class="desktop-break">あなただけの一枚に。</p></div>
-      <section class="setting-section text-section" aria-labelledby="text-heading">
-        <div class="section-title"><h2 id="text-heading"><span class="step">01</span>ことば</h2><span id="char-count" class="quiet">9 / 160</span></div>
-        <label class="sr-only" for="text-input">画像にする文字</label>
-        <textarea id="text-input" rows="3" maxlength="800" spellcheck="false" placeholder="好きな言葉を入力してください">言葉に、余白を。</textarea>
-        <p class="field-note">改行に対応。長い文章は自動で折り返します。</p>
-      </section>
-      <section class="setting-section font-section" aria-labelledby="font-heading">
-        <div class="section-title"><h2 id="font-heading"><span class="step">02</span>書体</h2><button id="open-fonts" type="button" class="text-button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>フォントを追加</button></div>
-        <div id="font-list" class="font-list" aria-label="表示するフォント"></div>
-        <details class="font-help"><summary>指定フォントについて</summary><p>游明朝体とヒラギノ角ゴ W3は端末のフォントを使います。端末にない場合は代替書体で表示されます。お持ちのフォントファイルを追加して指定することもできます。追加・入力した内容はこのブラウザ内に保存されます。</p></details>
-      </section>
-      <section class="setting-section appearance-section" aria-labelledby="appearance-heading">
-        <div class="section-title"><h2 id="appearance-heading"><span class="step">03</span>ととのえる</h2><span class="quiet">白背景・固定</span></div>
-        <div class="color-row"><span class="control-label">文字の色</span><div class="color-options"><button class="color-swatch is-selected" data-color="#000000" style="--swatch:#000000" type="button" aria-label="黒" aria-pressed="true"></button><button class="color-swatch" data-color="#b84b3b" style="--swatch:#b84b3b" type="button" aria-label="朱" aria-pressed="false"></button><button class="color-swatch" data-color="#304f6e" style="--swatch:#304f6e" type="button" aria-label="藍" aria-pressed="false"></button><button class="color-swatch" data-color="#536757" style="--swatch:#536757" type="button" aria-label="緑" aria-pressed="false"></button><label class="custom-color" title="好きな色を選ぶ"><span aria-hidden="true">＋</span><input id="color-input" type="color" value="#000000" aria-label="好きな文字色を選ぶ"></label></div><span id="color-value" class="color-code">#000000</span></div>
-        <details id="controls" class="fine-controls"><summary><span>文字サイズ・字間・行間</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="range-controls">
-          <div class="range-field"><div><label for="size-input">文字サイズ</label><output id="size-value" for="size-input">44 px</output></div><input id="size-input" type="range" min="28" max="72" value="44" step="1"><p>すべての書体・縦横で共通のサイズです。</p></div>
-          <div class="range-field"><div><label for="tracking-input">字間</label><output id="tracking-value" for="tracking-input">+0.10 em</output></div><input id="tracking-input" type="range" min="-0.2" max="0.8" value="0.1" step="0.025"><div class="range-labels"><span>せまく</span><span>ひろく</span></div></div>
-          <div class="range-field"><div><label for="line-input">行間</label><output id="line-value" for="line-input">1.50 倍</output></div><input id="line-input" type="range" min="0.8" max="2.4" value="1.5" step="0.05"><div class="range-labels"><span>せまく</span><span>ひろく</span></div></div>
-          <div class="range-field"><div><label for="wrap-input">1行の文字数</label><output id="wrap-value" for="wrap-input">12 文字</output></div><input id="wrap-input" type="range" min="6" max="24" value="12" step="1"><p>長い文章は自動で折り返します。</p></div>
-        </div></details>
-      </section>
+  <main class="app-shell" aria-label="レタリング画像の作成">
+    <header class="app-header">
+      <h1>LETTERING</h1>
+      <!-- app-version:start --><small id="app-version">v3</small><!-- app-version:end -->
+      <button id="open-fonts" class="fonts-button" type="button" aria-haspopup="dialog">書体 2</button>
+    </header>
+
+    <div class="text-bar">
+      <label class="sr-only" for="text-input">画像にする文字</label>
+      <textarea id="text-input" rows="2" maxlength="800" spellcheck="false" placeholder="文字を入力">永遠</textarea>
+      <span id="char-count" class="char-count">9 / 160</span>
+    </div>
+
+    <div class="canvas-toolbar">
+      <div class="direction-switch" role="group" aria-label="書き方向">
+        <button id="direction-both" type="button" data-mode="both" class="is-active" aria-pressed="true">両方</button>
+        <button id="direction-horizontal" type="button" data-mode="horizontal" aria-pressed="false">横書き</button>
+        <button id="direction-vertical" type="button" data-mode="vertical" aria-pressed="false">縦書き</button>
+      </div>
+      <button id="toggle-preview" class="zoom-button" type="button" aria-label="プレビューを拡大" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg><span>拡大</span></button>
+    </div>
+
+    <section class="canvas-area" aria-label="文字画像のプレビュー">
+      <div id="preview-stage" class="preview-stage">
+        <img id="preview-image" alt="文字画像のプレビュー" hidden>
+        <div id="preview-empty" class="preview-empty">文字を入力してください</div>
+      </div>
+      <span id="image-dimensions" class="image-dimensions">—</span>
+      <p id="render-status" class="render-status" aria-live="polite"></p>
     </section>
-    <section class="preview-panel" aria-label="文字画像のプレビュー">
-      <div class="preview-top"><div><span class="eyebrow">YOUR CANVAS</span><h2>プレビュー</h2></div><span class="live-label"><span></span>自動更新</span></div>
-      <div class="preview-toolbar"><div class="direction-switch" role="group" aria-label="書き方向"><button id="direction-both" type="button" data-mode="both" class="is-active" aria-pressed="true">縦・横</button><button id="direction-horizontal" type="button" data-mode="horizontal" aria-pressed="false">横書き</button><button id="direction-vertical" type="button" data-mode="vertical" aria-pressed="false">縦書き</button></div><button id="toggle-preview" type="button" class="zoom-button" aria-label="プレビューを原寸で表示"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg><span>原寸</span></button></div>
-      <div id="preview-stage" class="preview-stage"><img id="preview-image" alt="入力した文字の画像プレビュー" hidden><div id="preview-empty" class="preview-empty"><span aria-hidden="true">あ</span><p>言葉を入力すると、<br>ここに画像ができあがります。</p></div></div>
-      <div class="preview-meta"><span id="image-dimensions">画像を準備しています</span><span>白背景 / PNG</span></div>
-      <div class="canvas-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h10M5 8h10M10 12v5m-3-3 3 3 3-3"/></svg><p>横書きを上に、縦書きを下に。<br class="mobile-break">選んだ書体が順番に並びます。</p></div>
-      <p id="render-status" class="render-status" aria-live="polite">文字に合わせて画像の大きさを調整します。</p>
-      <div class="save-actions"><button id="save-button" class="save-button" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg><span>画像を保存</span><span class="save-format">PNG</span></button><button id="download-button" class="download-button" type="button" disabled>PNGをダウンロード<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M5 13 13 5M5 5h8v8"/></svg></button></div>
+
+    <section id="controls" class="adjustment-panel" aria-label="文字の調整">
+      <div class="range-field"><label for="size-input">サイズ</label><input id="size-input" type="range" min="28" max="72" value="44" step="1"><output id="size-value" for="size-input">44px</output></div>
+      <div class="range-field"><label for="tracking-input">字間</label><input id="tracking-input" type="range" min="-0.2" max="0.8" value="0.1" step="0.025"><output id="tracking-value" for="tracking-input">+0.10em</output></div>
+      <div class="range-field"><label for="line-input">行間</label><input id="line-input" type="range" min="0.8" max="2.4" value="1.5" step="0.05"><output id="line-value" for="line-input">1.50倍</output></div>
+      <div class="color-row">
+        <span class="control-label">色</span>
+        <div class="color-options" role="group" aria-label="文字色">
+          <button class="color-swatch is-selected" data-color="#000000" style="--swatch:#000000" type="button" aria-label="黒" aria-pressed="true"></button>
+          <button class="color-swatch" data-color="#b84b3b" style="--swatch:#b84b3b" type="button" aria-label="朱" aria-pressed="false"></button>
+          <button class="color-swatch" data-color="#304f6e" style="--swatch:#304f6e" type="button" aria-label="藍" aria-pressed="false"></button>
+          <button class="color-swatch" data-color="#536757" style="--swatch:#536757" type="button" aria-label="緑" aria-pressed="false"></button>
+          <label class="custom-color" title="色を指定"><span aria-hidden="true">＋</span><input id="color-input" type="color" value="#000000" aria-label="文字色を指定"></label>
+        </div>
+        <span id="color-value" class="color-value">#000000</span>
+      </div>
     </section>
+
+    <div class="save-bar"><button id="save-button" class="save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m-3-3 3 3 3-3M4 11v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5"/></svg><span>画像を保存</span><small>PNG</small></button></div>
   </main>
-  <footer class="site-footer"><span>白い背景。あなたの言葉。</span><span class="footer-brand">KOTONOHA · <!-- app-version:start --><small id="app-version">v2</small><!-- app-version:end --></span></footer>
-  <dialog id="font-dialog" class="font-dialog"><div class="dialog-heading"><div><p class="eyebrow">FONT LIBRARY</p><h2>書体をふやす</h2></div><button id="close-fonts" class="icon-button" type="button" aria-label="フォント追加を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div><p class="dialog-copy">いつもの言葉に、ちがう表情を。</p><h3 class="dialog-section-title">おすすめのフリーフォント</h3><div id="catalog-list" class="catalog-list"></div><div class="import-section"><h3 class="dialog-section-title">フォントファイルから追加</h3><p>フリーフォントサイトで入手したファイルを読み込めます。ZIPは先に解凍してください。</p><label class="file-picker" for="font-file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg><span>ファイルを選ぶ</span><small>TTF / OTF / WOFF / WOFF2</small><input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" multiple></label><details class="url-import"><summary>フォントのURLから追加</summary><label class="sr-only" for="font-url">フォントファイルのURL</label><div class="url-row"><input id="font-url" type="url" inputmode="url" placeholder="https://…/font.woff2"><button id="import-url" type="button">追加</button></div><p>フォントファイルの直接URLを入力してください。サイト側の設定によっては読み込めません。</p></details><p id="font-import-status" class="import-status" aria-live="polite"></p></div><div class="font-sources"><span>フォントを探す</span><a href="https://fonts.google.com/?subset=japanese" target="_blank" rel="noopener noreferrer">Google Fonts ↗</a><a href="https://fontfree.me/" target="_blank" rel="noopener noreferrer">FONT FREE ↗</a></div><p class="privacy-note">追加はこのアプリ内に保存されます。フォントの利用条件をご確認ください。</p></dialog>
-  <dialog id="save-dialog" class="save-dialog"><div class="dialog-heading"><div><p class="eyebrow">YOUR LETTERING</p><h2>画像ができました</h2></div><button id="close-save" class="icon-button" type="button" aria-label="保存画面を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div><p class="save-guide">iPhoneは共有メニューの「画像を保存」、または画像を長押しして写真に保存できます。</p><img id="saved-image" alt="保存用の文字画像"></dialog>
-  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+
+  <dialog id="font-dialog" class="font-dialog" aria-labelledby="fonts-heading">
+    <div class="dialog-heading"><h2 id="fonts-heading">書体</h2><button id="close-fonts" class="icon-button" type="button" aria-label="書体選択を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+    <div id="font-list" class="font-list" aria-label="表示する書体を選択"></div>
+    <details class="font-add-section"><summary>追加<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></summary>
+      <div class="font-add-content">
+        <div id="catalog-list" class="catalog-list"></div>
+        <label class="file-picker" for="font-file"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3m-3 3 3-3 3 3M4 12v4a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4"/></svg><span>ファイルから追加</span><small>TTF / OTF / WOFF2</small><input id="font-file" type="file" accept=".ttf,.otf,.woff,.woff2" multiple></label>
+        <details class="url-import"><summary>URLから追加</summary><div class="url-row"><label class="sr-only" for="font-url">フォントファイルのURL</label><input id="font-url" type="url" inputmode="url" placeholder="https://…/font.woff2"><button id="import-url" type="button">追加</button></div></details>
+        <p id="font-import-status" class="import-status" aria-live="polite"></p>
+        <div class="font-sources"><a href="https://fonts.google.com/?subset=japanese" target="_blank" rel="noopener noreferrer">Google Fonts ↗</a><a href="https://fontfree.me/" target="_blank" rel="noopener noreferrer">FONT FREE ↗</a></div>
+        <p class="font-note">追加した書体はこのブラウザに保存。</p>
+      </div>
+    </details>
+    <details class="advanced-settings"><summary>折り返し</summary><div class="range-field"><label for="wrap-input">1行</label><input id="wrap-input" type="range" min="6" max="24" value="12" step="1"><output id="wrap-value" for="wrap-input">12文字</output></div></details>
+  </dialog>
+
+  <dialog id="save-dialog" class="save-dialog" aria-labelledby="save-heading">
+    <div class="dialog-heading"><h2 id="save-heading">保存</h2><button id="close-save" class="icon-button" type="button" aria-label="保存画面を閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+    <p class="save-guide">画像を長押し → 写真に保存</p>
+    <img id="saved-image" alt="保存用の文字画像">
+    <button id="download-button" class="download-button" type="button" disabled>PNGをダウンロード<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m-3-3 3 3 3-3M4 13v4h12v-4"/></svg></button>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

@@ -1,7 +1,7 @@
 All font files are distributed under the SIL Open Font License 1.1.
 The adjacent *-OFL.txt files contain their copyright and license notices.
 Google Fonts source commit: 47d54ca1ebb14fd864695f1d39dc734f39017c33
-Full character maps, glyphs and vertical metrics are retained.
+Full character maps and glyphs are retained; Japanese vertical metrics and substitutions are retained.
 Noto variable fonts are instantiated at weight 400; all outputs are Regular WOFF2.
 
 noto-serif-jp.woff2 — Noto Serif JP, Regular (weight 400)
@@ -19,3 +19,27 @@ https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/of
 yuji-syuku.woff2 — Yuji Syuku, Regular (weight 400)
 https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/yujisyuku/YujiSyuku-Regular.ttf
 https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/yujisyuku
+
+alex-brush.woff2 — Alex Brush, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/alexbrush/AlexBrush-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/alexbrush
+
+sacramento.woff2 — Sacramento, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/sacramento/Sacramento-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/sacramento
+
+italianno.woff2 — Italianno, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/italianno/Italianno-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/italianno
+
+monsieur-la-doulaise.woff2 — Monsieur La Doulaise, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/monsieurladoulaise/MonsieurLaDoulaise-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/monsieurladoulaise
+
+parisienne.woff2 — Parisienne, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/parisienne/Parisienne-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/parisienne
+
+pinyon-script.woff2 — Pinyon Script, Regular (weight 400)
+https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/pinyonscript/PinyonScript-Regular.ttf
+https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/pinyonscript

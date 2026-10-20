@@ -1,1 +1,12 @@
-{"name":"kotonoha-studio","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.js"}}
+{
+  "name": "kotonoha-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

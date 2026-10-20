@@ -1,6 +1,6 @@
 # 文字画像作成Webアプリ
 
-入力した日本語を複数フォントで比較し、横書き・縦書きを白背景のPNGに保存するブラウザアプリです。
+タトゥーなどのレタリングを複数書体で比較し、横書き・縦書きを白背景PNGに保存するブラウザアプリです。メイン画面はスクロールせず、入力・プレビュー・調整・保存を一画面で操作します。
 
 ## 使い方
 
@@ -16,8 +16,8 @@
 
 ## 開発
 
-ビルド不要。`python3 -m http.server 8000` で表示し、`npm test` で文字分割・折り返し・画像寸法のテストを実行します。
+ビルド不要。`python3 -m http.server 8000` で表示し、`npm test` で文字分割・折り返し・画像寸法を検証します。ブラウザー回帰テストは `npm ci`、`npx playwright install --with-deps chromium webkit` の後に `npm run test:browser` で実行できます。
 
-フォントはOFLで配布される4種類です。出典・ライセンスは `assets/fonts/` にあります。再生成には `.github/build-font-assets.py` を使います。
+フォントはOFLで配布される英字6種類・日本語4種類です。出典・ライセンスは `assets/fonts/` にあります。再生成には `.github/build-font-assets.py` を使います。
 
 変更前のSHAを控え、反映前に `.github/mandatory.py --base <開始前SHA> --fix` と同じSHAでの通常検査を実行してください。

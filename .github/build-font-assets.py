@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build bundled Japanese fonts; run from the repository root.
+"""Build bundled fonts; run from the repository root.
 
 Dependencies: python -m pip install fonttools==4.61.1 brotli==1.2.0
 Usage: python .github/build-font-assets.py [output-directory]
@@ -33,7 +33,27 @@ FONTS = (
     ("yujisyuku", "YujiSyuku-Regular.ttf", "yuji-syuku", "Yuji Syuku",
      "82728ebafc8c97391e2dab633414a806f344b8e4e2227d307179f07b548fca61",
      "ef7c85c72ae94381c8bc4832ae4e6fbabdeafa2bb8a31313cd75dce95a690256"),
+    ("alexbrush", "AlexBrush-Regular.ttf", "alex-brush", "Alex Brush",
+     "df702038d8e27797230c77959c139eeea38cac0caf53e19ea5b513d3b0d3362d",
+     "0ee34ce7c99b0deb7f7332bca0a4950d3796c23c00de77ada8aa29a4b55ff2c2"),
+    ("sacramento", "Sacramento-Regular.ttf", "sacramento", "Sacramento",
+     "9341fda10adbfeb7efc94302b34507a3e227d7e7f5c432df3f5ac8753ff73d24",
+     "2e2cb5a98da665f2ab82a9fd01fb18c2337f845761b0c163f690ed65f3b94677"),
+    ("italianno", "Italianno-Regular.ttf", "italianno", "Italianno",
+     "f6ae96dea0da46c73370eb0575848ab0eda190315bdfda3f5b252bba3dc9173c",
+     "bce79721f0203586872bbd7016922baf449980bdd1c44550a821112a3b547185"),
+    ("monsieurladoulaise", "MonsieurLaDoulaise-Regular.ttf", "monsieur-la-doulaise", "Monsieur La Doulaise",
+     "dd3e04fbe661a7a70ff87b56b446e57a2605de5659c84d35ef58f4606ee68fad",
+     "a5fc033225d145b43fd7391482ae7689825414ce29a01614d651a3012b57c81e"),
+    ("parisienne", "Parisienne-Regular.ttf", "parisienne", "Parisienne",
+     "bc9ee17f022e20bc700797e5f557d14bfa43af0c98d9e6c9c5c1ca4ec7aacd57",
+     "1dd84b611f4bed7f9ff9089e76a96337b187e6f283a4ab33bcb987f844f2c4db"),
+    ("pinyonscript", "PinyonScript-Regular.ttf", "pinyon-script", "Pinyon Script",
+     "4aab130a6ed27f8b8117738c84a5602edf9300cdcc0651a9a65bf96f451ac29a",
+     "61d07cb0eaa943943648df2b11d0c2210e772053c192871e13f680b53fe0b77e"),
 )
+# Latin-only scripts do not provide Japanese vertical metrics or substitutions.
+JAPANESE_FONT_SLUGS = frozenset({"notoserifjp", "notosansjp", "zenmarugothic", "yujisyuku"})
 
 
 def download(url, expected_sha256):
@@ -73,11 +93,12 @@ def build_font(item, output):
         raise RuntimeError(f"Character or glyph coverage changed: {family}")
     if font["OS/2"].usWeightClass != 400 or "fvar" in font:
         raise RuntimeError(f"Expected static Regular weight 400: {family}")
-    if not all(table in font for table in ("vhea", "vmtx", "GSUB")):
-        raise RuntimeError(f"Missing vertical metrics or shaping: {family}")
-    tags = {record.FeatureTag for record in font["GSUB"].table.FeatureList.FeatureRecord}
-    if not tags.intersection({"vert", "vrt2"}):
-        raise RuntimeError(f"Missing vertical glyph substitutions: {family}")
+    if slug in JAPANESE_FONT_SLUGS:
+        if not all(table in font for table in ("vhea", "vmtx", "GSUB")):
+            raise RuntimeError(f"Missing vertical metrics or shaping: {family}")
+        tags = {record.FeatureTag for record in font["GSUB"].table.FeatureList.FeatureRecord}
+        if not tags.intersection({"vert", "vrt2"}):
+            raise RuntimeError(f"Missing vertical glyph substitutions: {family}")
     font.recalcTimestamp = False
     font.flavor = "woff2"
     result = BytesIO()
@@ -104,7 +125,7 @@ def main():
         "All font files are distributed under the SIL Open Font License 1.1.",
         "The adjacent *-OFL.txt files contain their copyright and license notices.",
         f"Google Fonts source commit: {COMMIT}",
-        "Full character maps, glyphs and vertical metrics are retained.",
+        "Full character maps and glyphs are retained; Japanese vertical metrics and substitutions are retained.",
         "Noto variable fonts are instantiated at weight 400; all outputs are Regular WOFF2.",
         "",
     ]
