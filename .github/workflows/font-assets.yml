@@ -1,0 +1,41 @@
+name: Prepare licensed font assets
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/build-font-assets.py'
+      - '.github/workflows/font-assets.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned font conversion tools
+        run: python -m pip install fonttools==4.61.1 brotli==1.2.0
+      - name: Build full Japanese font assets
+        run: python .github/build-font-assets.py assets/fonts
+      - name: Prepare Git blobs without changing the published branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          entries = []
+          repo = os.environ['GITHUB_REPOSITORY']
+          for path in sorted(Path('assets/fonts').iterdir()):
+              payload = json.dumps({'content':base64.b64encode(path.read_bytes()).decode(), 'encoding':'base64'}).encode()
+              request = Request(f'https://api.github.com/repos/{repo}/git/blobs', data=payload, method='POST', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'})
+              with urlopen(request, timeout=120) as response:
+                  result=json.load(response)
+              entries.append({'path':str(path), 'mode':'100644', 'type':'blob', 'sha':result['sha']})
+          print('FONT_ASSET_BLOBS_JSON=' + json.dumps(entries, separators=(',', ':')))
+          PY
